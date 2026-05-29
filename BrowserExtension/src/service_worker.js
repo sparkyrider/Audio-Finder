@@ -3,6 +3,8 @@ const HEARTBEAT_ALARM = "audio-finder-heartbeat";
 const COMMAND_WAIT_SECONDS = 10;
 const COMMAND_RETRY_MS = 250;
 const COMMAND_IDLE_GRACE_MS = 2 * 60 * 1000;
+const COMMAND_SOCKET_KEEPALIVE_MS = 20 * 1000;
+const COMMAND_SOCKET_RECONNECT_MS = 1000;
 const BROWSER_CHOICES = {
   chrome: {
     browserBundleID: "com.google.Chrome",
@@ -16,6 +18,9 @@ const BROWSER_CHOICES = {
 
 let pendingSend = null;
 let commandPollPromise = null;
+let commandSocket = null;
+let commandSocketKeepAlive = null;
+let commandSocketReconnect = null;
 let audibleTabCount = 0;
 let commandPollingUntil = 0;
 
@@ -57,6 +62,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
       Object.prototype.hasOwnProperty.call(changes, "port")
     )
   ) {
+    disconnectCommandSocket();
     queueSend();
   }
 });
@@ -111,6 +117,108 @@ function shouldKeepPollingCommands() {
   return Date.now() < commandPollingUntil;
 }
 
+function startCommandChannel() {
+  commandPollingUntil = Date.now() + COMMAND_IDLE_GRACE_MS;
+  connectCommandSocket();
+  startCommandPolling();
+}
+
+async function connectCommandSocket() {
+  if (!shouldKeepPollingCommands()) {
+    return;
+  }
+
+  if (
+    commandSocket !== null &&
+    (commandSocket.readyState === WebSocket.CONNECTING || commandSocket.readyState === WebSocket.OPEN)
+  ) {
+    return;
+  }
+
+  if (commandSocketReconnect !== null) {
+    clearTimeout(commandSocketReconnect);
+    commandSocketReconnect = null;
+  }
+
+  const options = await getOptions();
+  const browser = await resolveBrowser(options.browserChoice);
+  const params = new URLSearchParams({
+    browserBundleID: browser.browserBundleID
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${options.port}/v1/browser-command-stream?${params}`);
+  commandSocket = socket;
+
+  socket.onopen = () => {
+    startCommandSocketKeepAlive(socket);
+  };
+
+  socket.onmessage = (event) => {
+    handleBrowserCommandPayload(event.data).catch(() => undefined);
+  };
+
+  socket.onerror = () => {
+    startCommandPolling();
+    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+      socket.close();
+    }
+  };
+
+  socket.onclose = () => {
+    if (commandSocket === socket) {
+      commandSocket = null;
+    }
+    stopCommandSocketKeepAlive(socket);
+    scheduleCommandSocketReconnect();
+  };
+}
+
+function startCommandSocketKeepAlive(socket) {
+  stopCommandSocketKeepAlive();
+  commandSocketKeepAlive = setInterval(() => {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send("keepalive");
+    } else {
+      stopCommandSocketKeepAlive(socket);
+    }
+  }, COMMAND_SOCKET_KEEPALIVE_MS);
+}
+
+function stopCommandSocketKeepAlive(socket = null) {
+  if (socket !== null && commandSocket !== null && socket !== commandSocket) {
+    return;
+  }
+
+  if (commandSocketKeepAlive !== null) {
+    clearInterval(commandSocketKeepAlive);
+    commandSocketKeepAlive = null;
+  }
+}
+
+function scheduleCommandSocketReconnect() {
+  if (!shouldKeepPollingCommands() || commandSocketReconnect !== null) {
+    return;
+  }
+
+  commandSocketReconnect = setTimeout(() => {
+    commandSocketReconnect = null;
+    connectCommandSocket();
+  }, COMMAND_SOCKET_RECONNECT_MS);
+}
+
+function disconnectCommandSocket() {
+  if (commandSocketReconnect !== null) {
+    clearTimeout(commandSocketReconnect);
+    commandSocketReconnect = null;
+  }
+  stopCommandSocketKeepAlive();
+
+  if (commandSocket !== null) {
+    const socket = commandSocket;
+    commandSocket = null;
+    socket.close();
+  }
+}
+
 async function pollBrowserCommands() {
   const options = await getOptions();
   const browser = await resolveBrowser(options.browserChoice);
@@ -129,7 +237,17 @@ async function pollBrowserCommands() {
     return;
   }
 
-  for (const command of payload.commands) {
+  await handleBrowserCommands(payload.commands);
+}
+
+async function handleBrowserCommandPayload(data) {
+  const payload = typeof data === "string" ? JSON.parse(data) : data;
+  const commands = Array.isArray(payload?.commands) ? payload.commands : [payload];
+  await handleBrowserCommands(commands);
+}
+
+async function handleBrowserCommands(commands) {
+  for (const command of commands) {
     await handleBrowserCommand(command);
   }
 }
@@ -194,8 +312,7 @@ async function sendAudibleTabs() {
       lastPostAt: Date.now()
     });
     if (ok && audibleTabCount > 0) {
-      commandPollingUntil = Date.now() + COMMAND_IDLE_GRACE_MS;
-      startCommandPolling();
+      startCommandChannel();
     }
     return { ok, status: response.status };
   } catch (error) {

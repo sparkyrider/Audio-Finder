@@ -8,6 +8,7 @@
 //
 
 import Combine
+import CryptoKit
 import Darwin
 import Foundation
 
@@ -51,14 +52,14 @@ final class BrowserTabMonitor: ObservableObject {
     let port: UInt16 = 17654
 
     private var server: BrowserTabHTTPServer?
-    private let commandQueue = BrowserTabCommandQueue()
+    private let commandHub = BrowserTabCommandHub()
     private var snapshotDates: [String: Date] = [:]
     private let staleInterval: TimeInterval = 75
 
     func start() {
         guard server == nil else { return }
 
-        let httpServer = BrowserTabHTTPServer(port: port, commandQueue: commandQueue) { [weak self] update, origin in
+        let httpServer = BrowserTabHTTPServer(port: port, commandHub: commandHub) { [weak self] update, origin in
             Task { @MainActor in
                 self?.apply(update, origin: origin)
             }
@@ -113,12 +114,12 @@ final class BrowserTabMonitor: ObservableObject {
     }
 
     func activate(_ tab: BrowserAudioTab) {
-        commandQueue.enqueue(.activateTab(tab))
+        commandHub.enqueue(.activateTab(tab))
     }
 
     func resetTrustedExtensions() {
         BrowserExtensionTrust.reset()
-        commandQueue.removeAll()
+        commandHub.removeAll()
         trustedExtensionOrigins = []
         lastConnectorSeenAt = nil
         lastConnectorName = nil
@@ -240,20 +241,124 @@ private struct BrowserTabCommandResponse: Encodable {
     let commands: [BrowserTabCommand]
 }
 
-private final class BrowserTabCommandQueue {
-    private struct Key: Hashable {
-        let browserBundleID: String
-        let extensionOrigin: String?
+private struct BrowserTabCommandKey: Hashable {
+    let browserBundleID: String
+    let extensionOrigin: String?
+}
+
+private final class BrowserTabCommandHub {
+    private let condition = NSCondition()
+    private let fallbackQueue = BrowserTabCommandQueue()
+    private var clientsByKey: [BrowserTabCommandKey: [BrowserTabWebSocketClient]] = [:]
+
+    func enqueue(_ command: BrowserTabCommand) {
+        let key = BrowserTabCommandKey(
+            browserBundleID: command.browserBundleID,
+            extensionOrigin: command.extensionOrigin
+        )
+        let payload = BrowserTabCommandResponse(commands: [command])
+        let body = (try? JSONEncoder().encode(payload)) ?? Data()
+
+        condition.lock()
+        let clients = clientsByKey[key] ?? []
+        condition.unlock()
+
+        var delivered = false
+        var disconnected: [BrowserTabWebSocketClient] = []
+        for client in clients {
+            if client.sendText(body) {
+                delivered = true
+            } else {
+                disconnected.append(client)
+            }
+        }
+
+        if !disconnected.isEmpty {
+            condition.lock()
+            for client in disconnected {
+                removeLocked(client, from: key)
+            }
+            condition.unlock()
+        }
+
+        if !delivered {
+            fallbackQueue.enqueue(command)
+        }
     }
 
+    func takeCommands(
+        for browserBundleID: String,
+        extensionOrigin: String?,
+        waitSeconds: TimeInterval
+    ) -> [BrowserTabCommand] {
+        fallbackQueue.takeCommands(
+            for: browserBundleID,
+            extensionOrigin: extensionOrigin,
+            waitSeconds: waitSeconds
+        )
+    }
+
+    func addWebSocketClient(
+        _ client: BrowserTabWebSocketClient,
+        browserBundleID: String,
+        extensionOrigin: String
+    ) {
+        let key = BrowserTabCommandKey(
+            browserBundleID: browserBundleID,
+            extensionOrigin: extensionOrigin
+        )
+        condition.lock()
+        clientsByKey[key, default: []].removeAll { $0 === client }
+        clientsByKey[key, default: []].append(client)
+        condition.unlock()
+    }
+
+    func removeWebSocketClient(
+        _ client: BrowserTabWebSocketClient,
+        browserBundleID: String,
+        extensionOrigin: String
+    ) {
+        let key = BrowserTabCommandKey(
+            browserBundleID: browserBundleID,
+            extensionOrigin: extensionOrigin
+        )
+        condition.lock()
+        removeLocked(client, from: key)
+        condition.unlock()
+    }
+
+    func removeAll() {
+        condition.lock()
+        let clients = clientsByKey.values.flatMap { $0 }
+        clientsByKey.removeAll()
+        condition.unlock()
+
+        for client in clients {
+            client.close()
+        }
+        fallbackQueue.removeAll()
+    }
+
+    private func removeLocked(_ client: BrowserTabWebSocketClient, from key: BrowserTabCommandKey) {
+        clientsByKey[key]?.removeAll { $0 === client }
+        if clientsByKey[key]?.isEmpty == true {
+            clientsByKey.removeValue(forKey: key)
+        }
+    }
+}
+
+private final class BrowserTabCommandQueue {
     private let condition = NSCondition()
     private let staleInterval: TimeInterval = 30
-    private var commandsByKey: [Key: [BrowserTabCommand]] = [:]
+    private var commandsByKey: [BrowserTabCommandKey: [BrowserTabCommand]] = [:]
 
     func enqueue(_ command: BrowserTabCommand) {
         condition.lock()
         pruneLocked(now: Date().timeIntervalSince1970)
-        let key = Key(browserBundleID: command.browserBundleID, extensionOrigin: command.extensionOrigin)
+        let key = BrowserTabCommandKey(
+            browserBundleID: command.browserBundleID,
+            extensionOrigin: command.extensionOrigin
+        )
         commandsByKey[key, default: []].append(command)
         condition.broadcast()
         condition.unlock()
@@ -264,7 +369,10 @@ private final class BrowserTabCommandQueue {
         extensionOrigin: String?,
         waitSeconds: TimeInterval
     ) -> [BrowserTabCommand] {
-        let key = Key(browserBundleID: browserBundleID, extensionOrigin: extensionOrigin)
+        let key = BrowserTabCommandKey(
+            browserBundleID: browserBundleID,
+            extensionOrigin: extensionOrigin
+        )
         let deadline = Date().addingTimeInterval(max(0, waitSeconds))
         condition.lock()
         defer { condition.unlock() }
@@ -298,9 +406,71 @@ private final class BrowserTabCommandQueue {
     }
 }
 
+private final class BrowserTabWebSocketClient {
+    private let socketFD: Int32
+    private let sendLock = NSLock()
+
+    init(socketFD: Int32) {
+        self.socketFD = socketFD
+    }
+
+    func sendText(_ payload: Data) -> Bool {
+        sendFrame(opcode: 0x1, payload: payload)
+    }
+
+    func sendPong(_ payload: Data) -> Bool {
+        sendFrame(opcode: 0xA, payload: payload)
+    }
+
+    func close() {
+        _ = sendFrame(opcode: 0x8, payload: Data())
+        _ = Darwin.shutdown(socketFD, SHUT_RDWR)
+    }
+
+    private func sendFrame(opcode: UInt8, payload: Data) -> Bool {
+        var frame = Data([0x80 | opcode])
+        let payloadLength = payload.count
+
+        if payloadLength <= 125 {
+            frame.append(UInt8(payloadLength))
+        } else if payloadLength <= Int(UInt16.max) {
+            frame.append(126)
+            var length = UInt16(payloadLength).bigEndian
+            withUnsafeBytes(of: &length) { frame.append(contentsOf: $0) }
+        } else {
+            frame.append(127)
+            var length = UInt64(payloadLength).bigEndian
+            withUnsafeBytes(of: &length) { frame.append(contentsOf: $0) }
+        }
+
+        frame.append(payload)
+
+        sendLock.lock()
+        defer { sendLock.unlock() }
+
+        return frame.withUnsafeBytes { pointer in
+            guard let base = pointer.baseAddress else { return true }
+            var bytesSent = 0
+            while bytesSent < pointer.count {
+                let written = Darwin.send(
+                    socketFD,
+                    base.advanced(by: bytesSent),
+                    pointer.count - bytesSent,
+                    0
+                )
+                if written <= 0 {
+                    return false
+                }
+                bytesSent += written
+            }
+            return true
+        }
+    }
+}
+
 private final class BrowserTabHTTPServer {
     private let port: UInt16
-    private let commandQueue: BrowserTabCommandQueue
+    private let commandHub: BrowserTabCommandHub
     private let onUpdate: (BrowserTabUpdatePayload, String?) -> Void
     private let acceptQueue = DispatchQueue(label: "com.audiofinder.browser-tabs.accept", qos: .utility)
     private let clientQueue = DispatchQueue(label: "com.audiofinder.browser-tabs.clients", qos: .utility, attributes: .concurrent)
@@ -311,11 +481,11 @@ private final class BrowserTabHTTPServer {
 
     init(
         port: UInt16,
-        commandQueue: BrowserTabCommandQueue,
+        commandHub: BrowserTabCommandHub,
         onUpdate: @escaping (BrowserTabUpdatePayload, String?) -> Void
     ) {
         self.port = port
-        self.commandQueue = commandQueue
+        self.commandHub = commandHub
         self.onUpdate = onUpdate
     }
 
@@ -416,6 +586,11 @@ private final class BrowserTabHTTPServer {
     private func handleClient(_ client: Int32) {
         defer { Darwin.close(client) }
 
+        var yes: Int32 = 1
+        #if SO_NOSIGPIPE
+        _ = setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
+        #endif
+
         let flags = fcntl(client, F_GETFL, 0)
         if flags >= 0 {
             _ = fcntl(client, F_SETFL, flags & ~O_NONBLOCK)
@@ -443,6 +618,25 @@ private final class BrowserTabHTTPServer {
         case ("GET", "/v1/status"):
             let body = #"{"ok":true,"app":"Audio Finder"}"#.data(using: .utf8) ?? Data()
             sendResponse(.ok, body: body, contentType: "application/json", corsOrigin: corsOrigin, to: client)
+        case ("GET", "/v1/browser-command-stream"):
+            guard let corsOrigin else {
+                sendResponse(.forbidden, to: client)
+                return
+            }
+
+            let browserBundleID = request.queryItems["browserBundleID"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard supportedBrowserBundleIDs.contains(browserBundleID),
+                  request.isWebSocketUpgrade else {
+                sendResponse(.badRequest, corsOrigin: corsOrigin, to: client)
+                return
+            }
+
+            handleWebSocket(
+                client: client,
+                request: request,
+                browserBundleID: browserBundleID,
+                extensionOrigin: corsOrigin
+            )
         case ("GET", "/v1/browser-commands"):
             guard let corsOrigin else {
                 sendResponse(.forbidden, to: client)
@@ -457,7 +651,7 @@ private final class BrowserTabHTTPServer {
 
             let requestedWait = TimeInterval(request.queryItems["wait"].flatMap(Double.init) ?? 0)
             let waitSeconds = min(max(requestedWait, 0), 25)
-            let commands = commandQueue.takeCommands(
+            let commands = commandHub.takeCommands(
                 for: browserBundleID,
                 extensionOrigin: corsOrigin,
                 waitSeconds: waitSeconds
@@ -487,6 +681,138 @@ private final class BrowserTabHTTPServer {
         default:
             sendResponse(.notFound, to: client)
         }
+    }
+
+    private struct WebSocketFrame {
+        let opcode: UInt8
+        let payload: Data
+    }
+
+    private func handleWebSocket(
+        client: Int32,
+        request: HTTPRequest,
+        browserBundleID: String,
+        extensionOrigin: String
+    ) {
+        guard sendWebSocketUpgradeResponse(for: request, to: client) else { return }
+
+        var timeout = timeval(tv_sec: 45, tv_usec: 0)
+        _ = setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        _ = setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+
+        let webSocketClient = BrowserTabWebSocketClient(socketFD: client)
+        commandHub.addWebSocketClient(
+            webSocketClient,
+            browserBundleID: browserBundleID,
+            extensionOrigin: extensionOrigin
+        )
+        defer {
+            commandHub.removeWebSocketClient(
+                webSocketClient,
+                browserBundleID: browserBundleID,
+                extensionOrigin: extensionOrigin
+            )
+        }
+
+        while let frame = readWebSocketFrame(from: client) {
+            switch frame.opcode {
+            case 0x8:
+                webSocketClient.close()
+                return
+            case 0x9:
+                _ = webSocketClient.sendPong(frame.payload)
+            default:
+                continue
+            }
+        }
+    }
+
+    private func sendWebSocketUpgradeResponse(for request: HTTPRequest, to client: Int32) -> Bool {
+        guard let key = request.headers["sec-websocket-key"],
+              !key.isEmpty else {
+            sendResponse(.badRequest, to: client)
+            return false
+        }
+
+        let accept = webSocketAcceptValue(for: key)
+        let response = [
+            "HTTP/1.1 101 Switching Protocols",
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            "Sec-WebSocket-Accept: \(accept)",
+            "\r\n"
+        ].joined(separator: "\r\n")
+        return sendAll(Data(response.utf8), to: client)
+    }
+
+    private func webSocketAcceptValue(for key: String) -> String {
+        let source = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+        let digest = Insecure.SHA1.hash(data: Data(source.utf8))
+        return Data(digest).base64EncodedString()
+    }
+
+    private func readWebSocketFrame(from client: Int32) -> WebSocketFrame? {
+        guard let header = readExact(2, from: client) else { return nil }
+        let headerBytes = [UInt8](header)
+        let opcode = headerBytes[0] & 0x0F
+        let isMasked = (headerBytes[1] & 0x80) != 0
+        var payloadLength = UInt64(headerBytes[1] & 0x7F)
+
+        if payloadLength == 126 {
+            guard let lengthBytes = readExact(2, from: client) else { return nil }
+            payloadLength = [UInt8](lengthBytes).reduce(UInt64(0)) {
+                ($0 << 8) | UInt64($1)
+            }
+        } else if payloadLength == 127 {
+            guard let lengthBytes = readExact(8, from: client) else { return nil }
+            payloadLength = [UInt8](lengthBytes).reduce(UInt64(0)) {
+                ($0 << 8) | UInt64($1)
+            }
+        }
+
+        guard payloadLength <= 64 * 1024 else { return nil }
+
+        let maskBytes: [UInt8]
+        if isMasked {
+            guard let mask = readExact(4, from: client) else { return nil }
+            maskBytes = [UInt8](mask)
+        } else {
+            maskBytes = []
+        }
+
+        let payloadData = readExact(Int(payloadLength), from: client) ?? Data()
+        var payloadBytes = [UInt8](payloadData)
+        if isMasked {
+            for index in payloadBytes.indices {
+                payloadBytes[index] ^= maskBytes[index % 4]
+            }
+        }
+
+        return WebSocketFrame(opcode: opcode, payload: Data(payloadBytes))
+    }
+
+    private func readExact(_ count: Int, from client: Int32) -> Data? {
+        guard count > 0 else { return Data() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: min(4096, count))
+        while data.count < count {
+            let remaining = count - data.count
+            let requested = min(buffer.count, remaining)
+            let received = buffer.withUnsafeMutableBytes {
+                Darwin.recv(client, $0.baseAddress, requested, 0)
+            }
+
+            if received > 0 {
+                data.append(buffer, count: received)
+            } else if received < 0, errno == EINTR {
+                continue
+            } else {
+                return nil
+            }
+        }
+
+        return data
     }
 
     private func readRequest(from client: Int32) -> Data? {
@@ -543,9 +869,26 @@ private final class BrowserTabHTTPServer {
         let head = headers.joined(separator: "\r\n") + "\r\n\r\n"
         var response = Data(head.utf8)
         response.append(body)
-        response.withUnsafeBytes { pointer in
-            guard let base = pointer.baseAddress else { return }
-            _ = Darwin.send(client, base, response.count, 0)
+        _ = sendAll(response, to: client)
+    }
+
+    private func sendAll(_ data: Data, to client: Int32) -> Bool {
+        data.withUnsafeBytes { pointer in
+            guard let base = pointer.baseAddress else { return true }
+            var bytesSent = 0
+            while bytesSent < pointer.count {
+                let written = Darwin.send(
+                    client,
+                    base.advanced(by: bytesSent),
+                    pointer.count - bytesSent,
+                    0
+                )
+                if written <= 0 {
+                    return false
+                }
+                bytesSent += written
+            }
+            return true
         }
     }
 }
@@ -556,6 +899,11 @@ private struct HTTPRequest {
     let queryItems: [String: String]
     let headers: [String: String]
     let body: Data
+
+    var isWebSocketUpgrade: Bool {
+        headers["upgrade"]?.lowercased() == "websocket" &&
+        headers["connection"]?.lowercased().contains("upgrade") == true
+    }
 
     init?(data: Data) {
         guard let headerRange = data.range(of: Data([13, 10, 13, 10])) else { return nil }
