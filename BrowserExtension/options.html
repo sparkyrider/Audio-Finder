@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audio Finder Browser Connector</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>Audio Finder</h1>
+
+    <label>
+      Browser
+      <select id="browserChoice">
+        <option value="auto">Auto detect</option>
+        <option value="chrome">Google Chrome</option>
+        <option value="brave">Brave</option>
+      </select>
+    </label>
+
+    <label>
+      Local bridge port
+      <input id="port" type="number" min="1" max="65535">
+    </label>
+
+    <div class="actions">
+      <button id="save" type="button">Save</button>
+      <button id="test" type="button">Test</button>
+    </div>
+
+    <p id="status" role="status"></p>
+    <p class="note">The extension connects to Audio Finder automatically and sends titles for non-incognito tabs that Chrome or Brave marks as audible. It does not send URLs or audio.</p>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>
