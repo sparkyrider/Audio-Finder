@@ -1,7 +1,8 @@
 const DEFAULT_PORT = 17654;
 const HEARTBEAT_ALARM = "audio-finder-heartbeat";
-const COMMAND_WAIT_SECONDS = 25;
+const COMMAND_WAIT_SECONDS = 10;
 const COMMAND_RETRY_MS = 250;
+const COMMAND_IDLE_GRACE_MS = 2 * 60 * 1000;
 const BROWSER_CHOICES = {
   chrome: {
     browserBundleID: "com.google.Chrome",
@@ -16,6 +17,7 @@ const BROWSER_CHOICES = {
 let pendingSend = null;
 let commandPollPromise = null;
 let audibleTabCount = 0;
+let commandPollingUntil = 0;
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureAlarms();
@@ -97,12 +99,16 @@ function startCommandPolling() {
     .catch(() => undefined)
     .finally(() => {
       commandPollPromise = null;
-      if (audibleTabCount > 0) {
+      if (shouldKeepPollingCommands()) {
         setTimeout(startCommandPolling, COMMAND_RETRY_MS);
       }
     });
 
   return commandPollPromise;
+}
+
+function shouldKeepPollingCommands() {
+  return Date.now() < commandPollingUntil;
 }
 
 async function pollBrowserCommands() {
@@ -188,6 +194,7 @@ async function sendAudibleTabs() {
       lastPostAt: Date.now()
     });
     if (ok && audibleTabCount > 0) {
+      commandPollingUntil = Date.now() + COMMAND_IDLE_GRACE_MS;
       startCommandPolling();
     }
     return { ok, status: response.status };

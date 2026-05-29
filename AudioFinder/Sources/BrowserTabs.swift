@@ -25,6 +25,7 @@ struct BrowserAudioTab: Identifiable, Equatable {
     let tabID: Int
     let isMuted: Bool
     let isIncognito: Bool
+    let extensionOrigin: String?
     let receivedAt: Date
 
     var displayTitle: String {
@@ -150,6 +151,7 @@ final class BrowserTabMonitor: ObservableObject {
                 tabID: tab.tabID,
                 isMuted: tab.isMuted,
                 isIncognito: tab.isIncognito,
+                extensionOrigin: origin,
                 receivedAt: now
             )
         }
@@ -210,6 +212,16 @@ private struct BrowserTabCommand: Encodable {
     let windowID: Int
     let tabID: Int
     let createdAt: TimeInterval
+    let extensionOrigin: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case browserBundleID
+        case windowID
+        case tabID
+        case createdAt
+    }
 
     static func activateTab(_ tab: BrowserAudioTab) -> BrowserTabCommand {
         BrowserTabCommand(
@@ -218,7 +230,8 @@ private struct BrowserTabCommand: Encodable {
             browserBundleID: tab.browserBundleID,
             windowID: tab.windowID,
             tabID: tab.tabID,
-            createdAt: Date().timeIntervalSince1970
+            createdAt: Date().timeIntervalSince1970,
+            extensionOrigin: tab.extensionOrigin
         )
     }
 }
@@ -228,47 +241,58 @@ private struct BrowserTabCommandResponse: Encodable {
 }
 
 private final class BrowserTabCommandQueue {
+    private struct Key: Hashable {
+        let browserBundleID: String
+        let extensionOrigin: String?
+    }
+
     private let condition = NSCondition()
     private let staleInterval: TimeInterval = 30
-    private var commandsByBundleID: [String: [BrowserTabCommand]] = [:]
+    private var commandsByKey: [Key: [BrowserTabCommand]] = [:]
 
     func enqueue(_ command: BrowserTabCommand) {
         condition.lock()
         pruneLocked(now: Date().timeIntervalSince1970)
-        commandsByBundleID[command.browserBundleID, default: []].append(command)
+        let key = Key(browserBundleID: command.browserBundleID, extensionOrigin: command.extensionOrigin)
+        commandsByKey[key, default: []].append(command)
         condition.broadcast()
         condition.unlock()
     }
 
-    func takeCommands(for browserBundleID: String, waitSeconds: TimeInterval) -> [BrowserTabCommand] {
+    func takeCommands(
+        for browserBundleID: String,
+        extensionOrigin: String?,
+        waitSeconds: TimeInterval
+    ) -> [BrowserTabCommand] {
+        let key = Key(browserBundleID: browserBundleID, extensionOrigin: extensionOrigin)
         let deadline = Date().addingTimeInterval(max(0, waitSeconds))
         condition.lock()
         defer { condition.unlock() }
 
         pruneLocked(now: Date().timeIntervalSince1970)
-        while commandsByBundleID[browserBundleID]?.isEmpty ?? true {
+        while commandsByKey[key]?.isEmpty ?? true {
             guard waitSeconds > 0, Date() < deadline else { return [] }
             condition.wait(until: deadline)
             pruneLocked(now: Date().timeIntervalSince1970)
         }
 
-        return commandsByBundleID.removeValue(forKey: browserBundleID) ?? []
+        return commandsByKey.removeValue(forKey: key) ?? []
     }
 
     func removeAll() {
         condition.lock()
-        commandsByBundleID.removeAll()
+        commandsByKey.removeAll()
         condition.broadcast()
         condition.unlock()
     }
 
     private func pruneLocked(now: TimeInterval) {
-        for (bundleID, commands) in commandsByBundleID {
+        for (key, commands) in commandsByKey {
             let current = commands.filter { now - $0.createdAt <= staleInterval }
             if current.isEmpty {
-                commandsByBundleID.removeValue(forKey: bundleID)
+                commandsByKey.removeValue(forKey: key)
             } else {
-                commandsByBundleID[bundleID] = current
+                commandsByKey[key] = current
             }
         }
     }
@@ -433,7 +457,11 @@ private final class BrowserTabHTTPServer {
 
             let requestedWait = TimeInterval(request.queryItems["wait"].flatMap(Double.init) ?? 0)
             let waitSeconds = min(max(requestedWait, 0), 25)
-            let commands = commandQueue.takeCommands(for: browserBundleID, waitSeconds: waitSeconds)
+            let commands = commandQueue.takeCommands(
+                for: browserBundleID,
+                extensionOrigin: corsOrigin,
+                waitSeconds: waitSeconds
+            )
             let body = (try? JSONEncoder().encode(BrowserTabCommandResponse(commands: commands))) ?? Data()
             sendResponse(.ok, body: body, contentType: "application/json", corsOrigin: corsOrigin, to: client)
         case ("POST", "/v1/browser-tabs"):
