@@ -20,8 +20,20 @@
 		B100000B /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000B /* SettingsStore.swift */; };
 		B100000C /* OSSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C /* OSSupport.swift */; };
 		B1000011 /* BrowserTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* BrowserTabs.swift */; };
+		B1000012 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* AppCoordinator.swift */; };
 		B100000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100000D /* Assets.xcassets */; };
+		B2000001 /* PhaseOneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* PhaseOneTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		G2000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F1000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E1000001;
+			remoteInfo = AudioFinder;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A1000001 /* AudioFinderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFinderApp.swift; sourceTree = "<group>"; };
@@ -37,14 +49,24 @@
 		A100000B /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		A100000C /* OSSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSSupport.swift; sourceTree = "<group>"; };
 		A1000011 /* BrowserTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabs.swift; sourceTree = "<group>"; };
+		A1000012 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		A100000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A100000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A100000F /* AudioFinder.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioFinder.entitlements; sourceTree = "<group>"; };
 		A1000010 /* AudioFinder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioFinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001 /* PhaseOneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseOneTests.swift; sourceTree = "<group>"; };
+		A2000002 /* AudioFinderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioFinderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C1000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C2000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -58,6 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				D1000001 /* AudioFinder */,
+				D2000001 /* AudioFinderTests */,
 				D1000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -87,6 +110,7 @@
 				A100000B /* SettingsStore.swift */,
 				A100000C /* OSSupport.swift */,
 				A1000011 /* BrowserTabs.swift */,
+				A1000012 /* AppCoordinator.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -95,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000010 /* AudioFinder.app */,
+				A2000002 /* AudioFinderTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,6 +132,14 @@
 				A100000F /* AudioFinder.entitlements */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		D2000001 /* AudioFinderTests */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001 /* PhaseOneTests.swift */,
+			);
+			path = AudioFinderTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -129,6 +162,23 @@
 			productReference = A1000010 /* AudioFinder.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E2000001 /* AudioFinderTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2000003 /* Build configuration list for PBXNativeTarget "AudioFinderTests" */;
+			buildPhases = (
+				C2000002 /* Sources */,
+				C2000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				G2000002 /* PBXTargetDependency */,
+			);
+			name = AudioFinderTests;
+			productName = AudioFinderTests;
+			productReference = A2000002 /* AudioFinderTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -141,6 +191,10 @@
 				TargetAttributes = {
 					E1000001 = {
 						CreatedOnToolsVersion = 17.0;
+					};
+					E2000001 = {
+						CreatedOnToolsVersion = 17.0;
+						TestTargetID = E1000001;
 					};
 				};
 			};
@@ -158,6 +212,7 @@
 			projectRoot = "";
 			targets = (
 				E1000001 /* AudioFinder */,
+				E2000001 /* AudioFinderTests */,
 			);
 		};
 /* End PBXProject section */
@@ -191,10 +246,27 @@
 				B100000B /* SettingsStore.swift in Sources */,
 				B100000C /* OSSupport.swift in Sources */,
 				B1000011 /* BrowserTabs.swift in Sources */,
+				B1000012 /* AppCoordinator.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C2000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2000001 /* PhaseOneTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		G2000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E1000001 /* AudioFinder */;
+			targetProxy = G2000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F1000010 /* Debug */ = {
@@ -213,7 +285,7 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -232,7 +304,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -249,7 +321,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AudioFinder/Resources/Info.plist;
@@ -262,6 +334,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.app;
 				PRODUCT_NAME = AudioFinder;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
@@ -274,7 +347,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AudioFinder/Resources/Info.plist;
@@ -287,6 +360,35 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.app;
 				PRODUCT_NAME = AudioFinder;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		F2000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioFinder.app/Contents/MacOS/AudioFinder";
+			};
+			name = Debug;
+		};
+		F2000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioFinder.app/Contents/MacOS/AudioFinder";
 			};
 			name = Release;
 		};
@@ -307,6 +409,15 @@
 			buildConfigurations = (
 				F1000020 /* Debug */,
 				F1000021 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F2000003 /* Build configuration list for PBXNativeTarget "AudioFinderTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F2000010 /* Debug */,
+				F2000011 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

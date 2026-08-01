@@ -9,15 +9,13 @@
 import Foundation
 
 enum OSSupport {
-    /// V1 ships with a macOS 26 deployment target (the binary will not launch
-    /// below it), so this matches the LSMinimumSystemVersion floor. The runtime
-    /// check is a belt-and-suspenders guard; the underlying Core Audio
-    /// process-object API itself works from macOS 14, so lowering the target
-    /// later only requires changing this value and the deployment target.
-    static let minimumVersion = OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+    /// The Core Audio process-object API and the activation APIs used by Audio
+    /// Finder are available on macOS 14. The 14.2 floor matches the deployment
+    /// policy; the full multi-version release matrix remains a release gate.
+    static let minimumVersion = OperatingSystemVersion(majorVersion: 14, minorVersion: 2, patchVersion: 0)
 
     /// Human-readable floor for UI copy, kept in sync with `minimumVersion`.
-    static let minimumVersionLabel = "macOS 26"
+    static let minimumVersionLabel = "macOS 14.2"
 
     static var isSupported: Bool {
         ProcessInfo.processInfo.isOperatingSystemAtLeast(minimumVersion)

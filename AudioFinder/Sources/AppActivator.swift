@@ -8,6 +8,7 @@
 
 import AppKit
 
+@MainActor
 enum AppActivator {
 
     /// Bring the app described by `audioApp` to the front.

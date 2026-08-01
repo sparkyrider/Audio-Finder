@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var monitor: AudioMonitor
     @EnvironmentObject private var browserTabs: BrowserTabMonitor
@@ -23,10 +24,13 @@ struct SettingsView: View {
             diagnosticsTab
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
         }
-        .frame(width: 500, height: 420)
+        .frame(width: 540, height: 560)
         .onAppear {
             settings.refreshLaunchAtLogin()
             browserTabs.start()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            settings.refreshLaunchAtLogin()
         }
     }
 
@@ -35,8 +39,42 @@ struct SettingsView: View {
     private var generalTab: some View {
         Form {
             Section {
+                runningStatus
+            }
+
+            Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
+                Text("Audio Finder starts quietly in the menu bar after you sign in.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if settings.loginItemStatus == .requiresApproval {
+                    HStack {
+                        Label("Approval required in System Settings", systemImage: "person.badge.key")
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Open Login Items") {
+                            settings.openLoginItemSettings()
+                        }
+                    }
+                }
+
+                if let message = settings.launchAtLoginError {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section("Display") {
                 Toggle("Hide system & background apps", isOn: $settings.hideSystemApps)
+            }
+
+            Section {
+                Button("Show Welcome") {
+                    openWindow(id: AppWindow.welcome)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
             }
 
             Section("Recently Active") {
@@ -53,6 +91,50 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var runningStatus: some View {
+        HStack(spacing: 16) {
+            AudioSignalMark(isActive: !monitor.playing.isEmpty)
+                .frame(width: 58, height: 58)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(statusTitle)
+                    .font(.title3.bold())
+                Text(statusDetail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusTitle: String {
+        switch monitor.state {
+        case .ok:
+            return monitor.playing.isEmpty ? "Listening for audio" : "Audio source found"
+        case .unsupportedOS:
+            return "Unsupported macOS version"
+        case .error:
+            return "Audio detection is recovering"
+        }
+    }
+
+    private var statusDetail: String {
+        switch monitor.state {
+        case .ok:
+            if monitor.playing.isEmpty {
+                return "Audio Finder is running in your menu bar."
+            }
+            let count = monitor.playing.count
+            return "\(count) \(count == 1 ? "app is" : "apps are") using audio output."
+        case .unsupportedOS:
+            return "Audio Finder requires \(OSSupport.minimumVersionLabel) or later."
+        case .error(let message):
+            return message
+        }
     }
 
     // MARK: - Privacy

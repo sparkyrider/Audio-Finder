@@ -179,6 +179,12 @@ final class BrowserTabMonitor: ObservableObject {
             tabsByBundleID.removeValue(forKey: bundleID)
             snapshotDates.removeValue(forKey: bundleID)
         }
+
+        if let lastConnectorSeenAt,
+           now.timeIntervalSince(lastConnectorSeenAt) > staleInterval {
+            self.lastConnectorSeenAt = nil
+            lastConnectorName = nil
+        }
     }
 
     private static func browserName(for bundleID: String) -> String {
@@ -468,7 +474,11 @@ private final class BrowserTabWebSocketClient {
     }
 }
 
-private final class BrowserTabHTTPServer {
+/// Listener lifecycle calls come from the main actor, accepts run on the accept
+/// queue, and individual clients run on the client queue with locked shared
+/// queues. Cancellation can overlap only an in-flight syscall on the integer
+/// descriptor. The explicit conformance documents that boundary for Swift 6.
+private final class BrowserTabHTTPServer: @unchecked Sendable {
     private let port: UInt16
     private let commandHub: BrowserTabCommandHub
     private let onUpdate: (BrowserTabUpdatePayload, String?) -> Void

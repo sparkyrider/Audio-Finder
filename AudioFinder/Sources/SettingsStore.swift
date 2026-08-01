@@ -11,10 +11,55 @@ import Foundation
 import ServiceManagement
 import os
 
+enum LoginItemStatus: Equatable {
+    case notRegistered
+    case enabled
+    case requiresApproval
+    case notFound
+
+    var isRegistered: Bool {
+        self == .enabled || self == .requiresApproval
+    }
+}
+
+@MainActor
+protocol LoginItemManaging {
+    var status: LoginItemStatus { get }
+    func register() throws
+    func unregister() throws
+    func openSystemSettings()
+}
+
+@MainActor
+struct SystemLoginItemManager: LoginItemManaging {
+    var status: LoginItemStatus {
+        switch SMAppService.mainApp.status {
+        case .enabled: .enabled
+        case .notRegistered: .notRegistered
+        case .requiresApproval: .requiresApproval
+        case .notFound: .notFound
+        @unknown default: .notFound
+        }
+    }
+
+    func register() throws {
+        try SMAppService.mainApp.register()
+    }
+
+    func unregister() throws {
+        try SMAppService.mainApp.unregister()
+    }
+
+    func openSystemSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+}
+
 @MainActor
 final class SettingsStore: ObservableObject {
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let loginItemManager: LoginItemManaging
     private let log = Logger(subsystem: "com.audiofinder.app", category: "Settings")
 
     // Keys ------------------------------------------------------------------
@@ -48,10 +93,18 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    @Published private(set) var loginItemStatus: LoginItemStatus
+    @Published private(set) var launchAtLoginError: String?
+
     /// Guards against the didSet side-effect when we sync from the real state.
     private var suppressLaunchSync = false
 
-    init() {
+    init(
+        defaults: UserDefaults = .standard,
+        loginItemManager: LoginItemManaging? = nil
+    ) {
+        self.defaults = defaults
+        self.loginItemManager = loginItemManager ?? SystemLoginItemManager()
         defaults.register(defaults: [
             Key.showRecentlyActive: true,
             Key.recentlyActiveDuration: 30,
@@ -62,36 +115,47 @@ final class SettingsStore: ObservableObject {
         recentlyActiveDuration = defaults.integer(forKey: Key.recentlyActiveDuration)
         hideSystemApps = defaults.bool(forKey: Key.hideSystemApps)
         hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
-        launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        let initialLoginItemStatus = self.loginItemManager.status
+        loginItemStatus = initialLoginItemStatus
+        launchAtLogin = initialLoginItemStatus.isRegistered
+        launchAtLoginError = nil
     }
 
     /// Re-read the real login-item state (e.g. after returning from System Settings).
     func refreshLaunchAtLogin() {
-        let enabled = (SMAppService.mainApp.status == .enabled)
-        if enabled != launchAtLogin {
+        launchAtLoginError = nil
+        let currentStatus = loginItemManager.status
+        loginItemStatus = currentStatus
+        let registered = currentStatus.isRegistered
+        if registered != launchAtLogin {
             suppressLaunchSync = true
-            launchAtLogin = enabled   // update UI without re-registering
+            launchAtLogin = registered   // update UI without re-registering
             suppressLaunchSync = false
         }
     }
 
+    func openLoginItemSettings() {
+        loginItemManager.openSystemSettings()
+    }
+
     private func applyLaunchAtLogin(_ enable: Bool) {
+        launchAtLoginError = nil
         do {
             if enable {
-                if SMAppService.mainApp.status != .enabled {
-                    try SMAppService.mainApp.register()
+                if !loginItemManager.status.isRegistered {
+                    try loginItemManager.register()
                 }
             } else {
-                if SMAppService.mainApp.status == .enabled {
-                    try SMAppService.mainApp.unregister()
+                if loginItemManager.status.isRegistered {
+                    try loginItemManager.unregister()
                 }
             }
+            refreshLaunchAtLogin()
         } catch {
             log.error("Launch-at-login change failed: \(error.localizedDescription)")
-            // Re-sync the toggle to the real state on failure.
-            let actual = (SMAppService.mainApp.status == .enabled)
-            if actual != enable {
-                DispatchQueue.main.async { [weak self] in self?.launchAtLogin = actual }
+            refreshLaunchAtLogin()
+            if loginItemStatus != .requiresApproval {
+                launchAtLoginError = error.localizedDescription
             }
         }
     }

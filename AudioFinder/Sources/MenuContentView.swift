@@ -13,9 +13,8 @@ struct MenuContentView: View {
     @EnvironmentObject private var monitor: AudioMonitor
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var browserTabs: BrowserTabMonitor
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
-    @State private var showOnboarding = false
     @State private var isVisible = false
 
     // While the popover is open, tick at a low rate so it stays current even if
@@ -40,8 +39,8 @@ struct MenuContentView: View {
         .background(.regularMaterial)   // opaque popover surface (.window style is transparent by default)
         .onAppear {
             isVisible = true
-            syncAndStart()
             monitor.refreshNow()        // catch anything that changed while closed
+            browserTabs.refreshNow()
         }
         .onDisappear { isVisible = false }
         .onReceive(refreshTick) { _ in
@@ -49,13 +48,6 @@ struct MenuContentView: View {
             monitor.refreshNow()              // keep the open popover live
             browserTabs.refreshNow()
         }
-        .sheet(isPresented: $showOnboarding) {
-            OnboardingView { settings.hasCompletedOnboarding = true; showOnboarding = false }
-        }
-        // Re-sync monitor when settings change while the popover is open.
-        .onChange(of: settings.hideSystemApps) { _, _ in pushSettings() }
-        .onChange(of: settings.showRecentlyActive) { _, _ in pushSettings() }
-        .onChange(of: settings.recentlyActiveDuration) { _, _ in pushSettings() }
     }
 
     // MARK: - Sections
@@ -147,7 +139,7 @@ struct MenuContentView: View {
     private var footer: some View {
         HStack {
             Button {
-                openSettings()
+                openWindow(id: AppWindow.settings)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Settings", systemImage: "gearshape")
@@ -211,22 +203,4 @@ struct MenuContentView: View {
             .padding(.leading, 4)
     }
 
-    // MARK: - Wiring
-
-    private func syncAndStart() {
-        pushSettings()
-        monitor.start()
-        browserTabs.start()
-        if !settings.hasCompletedOnboarding {
-            showOnboarding = true
-        }
-    }
-
-    private func pushSettings() {
-        monitor.apply(
-            window: TimeInterval(settings.recentlyActiveDuration),
-            hideSystem: settings.hideSystemApps,
-            showRecent: settings.showRecentlyActive
-        )
-    }
 }

@@ -12,10 +12,10 @@
 //  outputting. An app's "is playing" is *derived* from that cache, never stored
 //  as a sticky flag — so when an object stops OR disappears from the HAL list
 //  (app quit/crash, closed browser tab), the app correctly leaves the playing
-//  list. We also reconcile fully on wake.
+//  list. We also reconcile fully on wake and after Core Audio service resets.
 //
-//  Event-driven: listeners push changes; a light timer only ages out the
-//  "recently active" list. Idle CPU ≈ 0.
+//  Event-driven: listeners push changes, with a light health pass every 15
+//  seconds and a timer that runs only while aging out the recent list.
 //
 
 import AppKit
@@ -96,8 +96,10 @@ final class AudioMonitor: ObservableObject {
     private var lastActiveByIdentity: [String: Date] = [:]
 
     private var processListListener: ListenerToken?
+    private var serviceRestartListener: ListenerToken?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var ageTimer: Timer?
+    private var healthTimer: Timer?
     private var started = false
 
     // Diagnostics -----------------------------------------------------------
@@ -115,21 +117,9 @@ final class AudioMonitor: ObservableObject {
             return
         }
 
-        // React to processes connecting/disconnecting from the HAL.
-        processListListener = CAProperty.addListener(
-            AudioObjectID(kAudioObjectSystemObject),
-            kAudioHardwarePropertyProcessObjectList,
-            queue: queue
-        ) { [weak self] in
-            Task { @MainActor in self?.refreshProcessSet() }
-        }
-
-        if processListListener == nil {
-            state = .error("Could not observe the audio process list.")
-            lastError = "AudioObjectAddPropertyListenerBlock failed for process list."
-        }
-
         observeWorkspace()
+        establishSystemListeners()
+        startHealthTimer()
         refreshProcessSet()
     }
 
@@ -146,15 +136,69 @@ final class AudioMonitor: ObservableObject {
         processListeners.removeAll()
         processListListener?.remove()
         processListListener = nil
+        serviceRestartListener?.remove()
+        serviceRestartListener = nil
         tracked.removeAll()
         let nc = NSWorkspace.shared.notificationCenter
         workspaceObservers.forEach { nc.removeObserver($0) }
         workspaceObservers.removeAll()
         ageTimer?.invalidate()
         ageTimer = nil
+        healthTimer?.invalidate()
+        healthTimer = nil
     }
 
-    deinit { ageTimer?.invalidate() }
+    /// Establish listeners owned by the Core Audio system object. Either can
+    /// become invalid when coreaudiod resets, so the health timer retries any
+    /// missing registration without requiring an app restart.
+    private func establishSystemListeners() {
+        guard started else { return }
+
+        if serviceRestartListener == nil {
+            serviceRestartListener = CAProperty.addListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                kAudioHardwarePropertyServiceRestarted,
+                queue: queue
+            ) { [weak self] in
+                Task { @MainActor in self?.handleAudioServiceRestart() }
+            }
+        }
+
+        if processListListener == nil {
+            processListListener = CAProperty.addListener(
+                AudioObjectID(kAudioObjectSystemObject),
+                kAudioHardwarePropertyProcessObjectList,
+                queue: queue
+            ) { [weak self] in
+                Task { @MainActor in self?.refreshProcessSet() }
+            }
+        }
+
+        if processListListener == nil {
+            state = .error("Audio detection is reconnecting. It will retry automatically.")
+            lastError = "Could not observe the Core Audio process list."
+        } else {
+            state = .ok
+            lastError = nil
+        }
+    }
+
+    private func startHealthTimer() {
+        guard healthTimer == nil else { return }
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.started else { return }
+                self.establishSystemListeners()
+                self.refreshProcessSet()
+            }
+        }
+    }
+
+    private func handleAudioServiceRestart() {
+        guard started else { return }
+        log.notice("Core Audio restarted; rebuilding process listeners")
+        rebuildHALConnections()
+    }
 
     // MARK: - Process set management
 
@@ -191,9 +235,9 @@ final class AudioMonitor: ObservableObject {
                 ) { [weak self] in
                     Task { @MainActor in self?.evaluateProcess(obj) }
                 }
-                processListeners[obj] = token   // track even if the listener
-                                                // failed, so the cache stays
-                                                // consistent.
+                // A nil token is deliberately not cached; the next health pass
+                // retries that process while cache reconciliation still works.
+                processListeners[obj] = token
             }
             cacheProcess(obj)
         }
@@ -243,19 +287,19 @@ final class AudioMonitor: ObservableObject {
     private func rememberMeta(_ resolved: ResolvedApp) {
         let icon = resolved.runningApplication?.icon
         let existing = appMeta[resolved.identity]
-        // Refresh if missing or if we now have a better (non-nil) icon/name.
-        if existing == nil || (existing?.icon == nil && icon != nil) {
-            appMeta[resolved.identity] = AudioApp(
-                id: resolved.identity,
-                bundleID: resolved.bundleID,
-                name: resolved.name,
-                icon: icon,
-                activationPID: resolved.runningApplication?.processIdentifier,
-                isSystemOrOther: resolved.isSystemOrOther,
-                isPlaying: false,
-                lastActive: .distantPast
-            )
-        }
+        // Always refresh the live PID and display metadata. An app can relaunch
+        // under the same bundle identity while our recently-active entry is
+        // still cached; retaining the old PID would make its Open action stale.
+        appMeta[resolved.identity] = AudioApp(
+            id: resolved.identity,
+            bundleID: resolved.bundleID,
+            name: resolved.name,
+            icon: icon ?? existing?.icon,
+            activationPID: resolved.runningApplication?.processIdentifier,
+            isSystemOrOther: resolved.isSystemOrOther,
+            isPlaying: existing?.isPlaying ?? false,
+            lastActive: existing?.lastActive ?? .distantPast
+        )
     }
 
     // MARK: - Workspace / power observation
@@ -272,21 +316,40 @@ final class AudioMonitor: ObservableObject {
             MainActor.assumeIsolated { self?.refreshProcessSet() }
         })
 
+        // App launch: update activation PIDs and icons for any identities that
+        // are still in the recently-active window.
+        workspaceObservers.append(nc.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshProcessSet() }
+        })
+
         // Wake from sleep: coreaudiod and HAL objects may have been recreated
         // and we may have missed transitions — fully reconcile.
         workspaceObservers.append(nc.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reconcileAll() }
+            MainActor.assumeIsolated { self?.rebuildHALConnections() }
         })
     }
 
-    /// Full reconciliation: rebuild listeners and re-read every process object.
-    private func reconcileAll() {
+    /// Full reconciliation after wake or a Core Audio reset. Apple documents
+    /// that clients must re-establish all cached state and listeners after the
+    /// service-restarted signal.
+    private func rebuildHALConnections() {
         guard started else { return }
-        // Re-read all currently tracked objects, then reconcile membership.
-        for obj in Array(processListeners.keys) { cacheProcess(obj) }
+
+        processListeners.values.forEach { $0.remove() }
+        processListeners.removeAll()
+        processListListener?.remove()
+        processListListener = nil
+        serviceRestartListener?.remove()
+        serviceRestartListener = nil
+        tracked.removeAll()
+
+        establishSystemListeners()
         refreshProcessSet()
     }
 
