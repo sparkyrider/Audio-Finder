@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Audio Finder Browser Connector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minimum_chrome_version": "116",
   "description": "Sends currently audible Chrome or Brave tab titles to the Audio Finder app on this Mac.",
   "permissions": ["alarms", "storage", "tabs"],
