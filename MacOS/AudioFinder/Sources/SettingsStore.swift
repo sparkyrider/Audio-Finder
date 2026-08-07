@@ -60,7 +60,7 @@ final class SettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private let loginItemManager: LoginItemManaging
-    private let log = Logger(subsystem: "com.audiofinder.app", category: "Settings")
+    private let log = Logger(subsystem: "app.audiofinder.mac", category: "Settings")
 
     // Keys ------------------------------------------------------------------
     private enum Key {

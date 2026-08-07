@@ -49,12 +49,12 @@ if [[ ! -d "$BUILT_APP" ]]; then
 fi
 
 app_is_running() {
-  [[ "$(osascript -e 'application id "com.audiofinder.app" is running' 2>/dev/null || true)" == "true" ]]
+  [[ "$(osascript -e 'application id "app.audiofinder.mac" is running' 2>/dev/null || true)" == "true" ]]
 }
 
 if app_is_running; then
   echo "Closing the running copy of Audio Finder…"
-  osascript -e 'tell application id "com.audiofinder.app" to quit' >/dev/null 2>&1 || true
+  osascript -e 'tell application id "app.audiofinder.mac" to quit' >/dev/null 2>&1 || true
   for _ in {1..20}; do
     if ! app_is_running; then
       break

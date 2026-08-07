@@ -482,8 +482,8 @@ private final class BrowserTabHTTPServer: @unchecked Sendable {
     private let port: UInt16
     private let commandHub: BrowserTabCommandHub
     private let onUpdate: (BrowserTabUpdatePayload, String?) -> Void
-    private let acceptQueue = DispatchQueue(label: "com.audiofinder.browser-tabs.accept", qos: .utility)
-    private let clientQueue = DispatchQueue(label: "com.audiofinder.browser-tabs.clients", qos: .utility, attributes: .concurrent)
+    private let acceptQueue = DispatchQueue(label: "app.audiofinder.mac.browser-tabs.accept", qos: .utility)
+    private let clientQueue = DispatchQueue(label: "app.audiofinder.mac.browser-tabs.clients", qos: .utility, attributes: .concurrent)
     private let maxRequestBytes = 256 * 1024
 
     private var socketFD: Int32 = -1

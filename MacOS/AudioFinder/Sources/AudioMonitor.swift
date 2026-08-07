@@ -77,8 +77,8 @@ final class AudioMonitor: ObservableObject {
     }
 
     // Internals -------------------------------------------------------------
-    private let queue = DispatchQueue(label: "com.audiofinder.monitor", qos: .utility)
-    private let log = Logger(subsystem: "com.audiofinder.app", category: "AudioMonitor")
+    private let queue = DispatchQueue(label: "app.audiofinder.mac.monitor", qos: .utility)
+    private let log = Logger(subsystem: "app.audiofinder.mac", category: "AudioMonitor")
 
     /// What we know about each tracked HAL process object.
     private struct TrackedProcess {
