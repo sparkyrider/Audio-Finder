@@ -7,6 +7,14 @@
 
 import SwiftUI
 
+private enum ProductLinks {
+    static let privacyPolicy = URL(string: "https://audiofinder.app/privacy")!
+    static let termsOfService = URL(string: "https://audiofinder.app/terms")!
+    static let browserConnector = URL(
+        string: "https://chromewebstore.google.com/detail/ehngclenbdcacgiajflfjfffhlilpcko"
+    )!
+}
+
 struct SettingsView: View {
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var settings: SettingsStore
@@ -158,6 +166,15 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                HStack(spacing: 16) {
+                    Link("Privacy Policy", destination: ProductLinks.privacyPolicy)
+                    Link("Terms of Service", destination: ProductLinks.termsOfService)
+                }
+                .font(.callout)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,9 +200,13 @@ struct SettingsView: View {
             }
 
             Section {
-                Text("Install the companion browser extension once. After that, audible Chrome and Brave tab titles connect automatically over 127.0.0.1 without a pairing code.")
+                Text("Install the companion browser extension, review its disclosure, and enable the connector. After that, audible Chrome and Brave tab titles connect automatically over 127.0.0.1 without a pairing code.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Link(destination: ProductLinks.browserConnector) {
+                    Label("Get Browser Connector", systemImage: "arrow.up.right.square")
+                }
             }
         }
         .formStyle(.grouped)

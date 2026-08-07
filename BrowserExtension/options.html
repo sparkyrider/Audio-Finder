@@ -8,7 +8,21 @@
 </head>
 <body>
   <main>
-    <h1>Audio Finder</h1>
+    <div class="brand">
+      <img src="icons/icon_48.png" width="40" height="40" alt="">
+      <h1>Audio Finder</h1>
+    </div>
+
+    <section class="disclosure" aria-labelledby="disclosure-title">
+      <h2 id="disclosure-title">Before you enable the connector</h2>
+      <p>Audio Finder Browser Connector reads the titles, tab and window identifiers, and mute state of non-incognito tabs that Chrome or Brave marks as audible.</p>
+      <p>It sends that information only to the Audio Finder app on this Mac at <code>127.0.0.1</code>. It does not read or send URLs, browsing history, incognito tabs, page content beyond the audible tab title, or audio. Nothing is sent to Things or any third party.</p>
+
+      <label class="consent">
+        <input id="sharingEnabled" type="checkbox">
+        <span>I understand and want to enable the local Audio Finder connector.</span>
+      </label>
+    </section>
 
     <label>
       Browser
@@ -21,7 +35,7 @@
 
     <label>
       Local bridge port
-      <input id="port" type="number" min="1" max="65535">
+      <input id="port" type="text" value="17654" readonly aria-readonly="true">
     </label>
 
     <div class="actions">
@@ -30,7 +44,7 @@
     </div>
 
     <p id="status" role="status"></p>
-    <p class="note">The extension connects to Audio Finder automatically and sends titles for non-incognito tabs that Chrome or Brave marks as audible. It does not send URLs or audio.</p>
+    <p class="note">The production Mac app uses the fixed local port 17654. You can disable the connector at any time by clearing the checkbox above and choosing Save.</p>
   </main>
   <script src="options.js"></script>
 </body>

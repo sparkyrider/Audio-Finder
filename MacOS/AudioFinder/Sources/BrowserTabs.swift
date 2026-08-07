@@ -1001,14 +1001,17 @@ private struct HTTPRequest {
     }
 }
 
-private enum BrowserExtensionTrust {
+enum BrowserExtensionTrust {
     private static let defaultsKey = "BrowserTabTrustedExtensionOrigins"
     private static let maxTrustedOrigins = 4
 
-    /// Current unpacked-development ID observed in Brave. Add the published
-    /// Chrome Web Store ID here before submitting the Mac app for review.
+    /// Stable ID assigned to the production Chrome Web Store item. Debug builds
+    /// can additionally remember unpacked extensions for local development.
+    static let productionExtensionOrigin =
+        "chrome-extension://ehngclenbdcacgiajflfjfffhlilpcko"
+
     private static let knownExtensionOrigins: Set<String> = [
-        "chrome-extension://hdfaeopcegkiplloaieikdldflangodo"
+        productionExtensionOrigin
     ]
 
     static var trustedOrigins: [String] {

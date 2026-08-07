@@ -190,9 +190,11 @@ struct MenuBarIcon: View {
     let isPlaying: Bool
 
     var body: some View {
-        Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-            .symbolRenderingMode(.hierarchical)
-            // Subtle emphasis when audio is active.
+        Image("MenuBarMark")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
             .foregroundStyle(isPlaying ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             .accessibilityLabel(isPlaying ? "Audio is playing" : "No audio playing")
     }

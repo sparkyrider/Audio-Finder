@@ -24,9 +24,12 @@ let commandSocketReconnect = null;
 let audibleTabCount = 0;
 let commandPollingUntil = 0;
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   ensureAlarms();
   queueSend();
+  if (details.reason === "install") {
+    chrome.runtime.openOptionsPage();
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {
@@ -59,7 +62,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     area === "local" &&
     (
       Object.prototype.hasOwnProperty.call(changes, "browserChoice") ||
-      Object.prototype.hasOwnProperty.call(changes, "port")
+      Object.prototype.hasOwnProperty.call(changes, "sharingEnabled")
     )
   ) {
     disconnectCommandSocket();
@@ -76,6 +79,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .then((result) => sendResponse(result))
     .catch((error) => sendResponse({ ok: false, error: String(error) }));
   return true;
+});
+
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
 });
 
 ensureAlarms();
@@ -145,7 +152,7 @@ async function connectCommandSocket() {
   const params = new URLSearchParams({
     browserBundleID: browser.browserBundleID
   });
-  const socket = new WebSocket(`ws://127.0.0.1:${options.port}/v1/browser-command-stream?${params}`);
+  const socket = new WebSocket(`ws://127.0.0.1:${DEFAULT_PORT}/v1/browser-command-stream?${params}`);
   commandSocket = socket;
 
   socket.onopen = () => {
@@ -226,7 +233,7 @@ async function pollBrowserCommands() {
     browserBundleID: browser.browserBundleID,
     wait: String(COMMAND_WAIT_SECONDS)
   });
-  const response = await fetch(`http://127.0.0.1:${options.port}/v1/browser-commands?${params}`);
+  const response = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/v1/browser-commands?${params}`);
 
   if (!response.ok) {
     return;
@@ -276,6 +283,17 @@ async function handleBrowserCommand(command) {
 
 async function sendAudibleTabs() {
   const options = await getOptions();
+  if (!options.sharingEnabled) {
+    audibleTabCount = 0;
+    commandPollingUntil = 0;
+    disconnectCommandSocket();
+    await chrome.storage.local.set({
+      lastStatus: "Connector disabled",
+      lastPostAt: Date.now()
+    });
+    return { ok: false, disabled: true };
+  }
+
   const browser = await resolveBrowser(options.browserChoice);
   const tabs = await chrome.tabs.query({ audible: true });
   const audibleTabs = tabs.filter((tab) => (
@@ -298,7 +316,7 @@ async function sendAudibleTabs() {
   };
 
   try {
-    const response = await fetch(`http://127.0.0.1:${options.port}/v1/browser-tabs`, {
+    const response = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/v1/browser-tabs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -327,12 +345,12 @@ async function sendAudibleTabs() {
 async function getOptions() {
   const stored = await chrome.storage.local.get({
     browserChoice: "auto",
-    port: DEFAULT_PORT
+    sharingEnabled: false
   });
 
   return {
     browserChoice: String(stored.browserChoice || "auto"),
-    port: Number(stored.port) || DEFAULT_PORT
+    sharingEnabled: stored.sharingEnabled === true
   };
 }
 

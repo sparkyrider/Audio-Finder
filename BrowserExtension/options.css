@@ -12,9 +12,58 @@ main {
 }
 
 h1 {
-  margin: 0 0 18px;
+  margin: 0;
   font-size: 20px;
   font-weight: 650;
+}
+
+.brand {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  margin: 0 0 18px;
+}
+
+.brand img {
+  display: block;
+  border-radius: 10px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.disclosure {
+  margin-bottom: 18px;
+  border: 1px solid #8fd5dc;
+  border-radius: 8px;
+  padding: 14px;
+  background: #effbfd;
+}
+
+.disclosure p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.disclosure code {
+  font-size: 0.92em;
+}
+
+.consent {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin: 14px 0 0;
+  font-weight: 650;
+}
+
+.consent input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
 }
 
 label {
@@ -37,6 +86,11 @@ select {
   font: inherit;
 }
 
+input[readonly] {
+  background: #f0f2f4;
+  color: #57606a;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -56,8 +110,8 @@ button {
 }
 
 button:first-child {
-  border-color: #0969da;
-  background: #0969da;
+  border-color: #0a7481;
+  background: #0a7481;
   color: #fff;
 }
 

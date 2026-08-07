@@ -19,9 +19,10 @@
 		B100000A /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A /* Diagnostics.swift */; };
 		B100000B /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000B /* SettingsStore.swift */; };
 		B100000C /* OSSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C /* OSSupport.swift */; };
+		B100000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100000D /* Assets.xcassets */; };
 		B1000011 /* BrowserTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* BrowserTabs.swift */; };
 		B1000012 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* AppCoordinator.swift */; };
-		B100000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100000D /* Assets.xcassets */; };
+		B1000013 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1000013 /* PrivacyInfo.xcprivacy */; };
 		B2000001 /* PhaseOneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* PhaseOneTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -48,12 +49,13 @@
 		A100000A /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		A100000B /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		A100000C /* OSSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSSupport.swift; sourceTree = "<group>"; };
-		A1000011 /* BrowserTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabs.swift; sourceTree = "<group>"; };
-		A1000012 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		A100000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A100000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A100000F /* AudioFinder.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioFinder.entitlements; sourceTree = "<group>"; };
 		A1000010 /* AudioFinder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioFinder.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000011 /* BrowserTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabs.swift; sourceTree = "<group>"; };
+		A1000012 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		A1000013 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A2000001 /* PhaseOneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseOneTests.swift; sourceTree = "<group>"; };
 		A2000002 /* AudioFinderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioFinderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -130,6 +132,7 @@
 				A100000D /* Assets.xcassets */,
 				A100000E /* Info.plist */,
 				A100000F /* AudioFinder.entitlements */,
+				A1000013 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -223,6 +226,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B100000D /* Assets.xcassets in Resources */,
+				B1000013 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -318,9 +322,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AudioFinder/Resources/AudioFinder.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -344,9 +350,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AudioFinder/Resources/AudioFinder.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -369,6 +377,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.tests;
@@ -383,6 +392,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.audiofinder.tests;

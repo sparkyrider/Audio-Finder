@@ -242,6 +242,31 @@ final class AudioMonitorIntegrationTests: XCTestCase {
     }
 }
 
+final class BrowserExtensionTrustTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        BrowserExtensionTrust.reset()
+    }
+
+    override func tearDown() {
+        BrowserExtensionTrust.reset()
+        super.tearDown()
+    }
+
+    func testProductionWebStoreOriginIsTrustedAndRemembered() {
+        let origin = BrowserExtensionTrust.productionExtensionOrigin
+
+        XCTAssertEqual(BrowserExtensionTrust.trustableOrigin(from: origin), origin)
+        XCTAssertEqual(BrowserExtensionTrust.trustedOrigins, [origin])
+    }
+
+    func testMalformedExtensionOriginsAreRejected() {
+        XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: nil))
+        XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: "https://example.com"))
+        XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: "chrome-extension://too-short"))
+    }
+}
+
 @MainActor
 private final class FakeLoginItemManager: LoginItemManaging {
     var status: LoginItemStatus
