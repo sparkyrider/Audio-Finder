@@ -1,4 +1,5 @@
-const DEFAULT_PORT = 17654;
+const BRIDGE_PORTS = [17654, 17655];
+const BRIDGE_APP_NAME = "Audio Finder";
 const HEARTBEAT_ALARM = "audio-finder-heartbeat";
 const COMMAND_WAIT_SECONDS = 10;
 const COMMAND_RETRY_MS = 250;
@@ -23,6 +24,8 @@ let commandSocketKeepAlive = null;
 let commandSocketReconnect = null;
 let audibleTabCount = 0;
 let commandPollingUntil = 0;
+let activeBridgePort = null;
+let bridgeDiscoveryPromise = null;
 
 chrome.runtime.onInstalled.addListener((details) => {
   ensureAlarms();
@@ -149,10 +152,17 @@ async function connectCommandSocket() {
 
   const options = await getOptions();
   const browser = await resolveBrowser(options.browserChoice);
+  let port;
+  try {
+    port = await findBridgePort();
+  } catch (_error) {
+    scheduleCommandSocketReconnect();
+    return;
+  }
   const params = new URLSearchParams({
     browserBundleID: browser.browserBundleID
   });
-  const socket = new WebSocket(`ws://127.0.0.1:${DEFAULT_PORT}/v1/browser-command-stream?${params}`);
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/browser-command-stream?${params}`);
   commandSocket = socket;
 
   socket.onopen = () => {
@@ -164,6 +174,7 @@ async function connectCommandSocket() {
   };
 
   socket.onerror = () => {
+    invalidateBridgePort(port);
     startCommandPolling();
     if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
       socket.close();
@@ -171,6 +182,7 @@ async function connectCommandSocket() {
   };
 
   socket.onclose = () => {
+    invalidateBridgePort(port);
     if (commandSocket === socket) {
       commandSocket = null;
     }
@@ -229,22 +241,30 @@ function disconnectCommandSocket() {
 async function pollBrowserCommands() {
   const options = await getOptions();
   const browser = await resolveBrowser(options.browserChoice);
+  const port = await findBridgePort();
   const params = new URLSearchParams({
     browserBundleID: browser.browserBundleID,
     wait: String(COMMAND_WAIT_SECONDS)
   });
-  const response = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/v1/browser-commands?${params}`);
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/browser-commands?${params}`);
 
-  if (!response.ok) {
-    return;
+    if (!response.ok) {
+      invalidateBridgePort(port);
+      return;
+    }
+
+    const payload = await response.json();
+    if (!Array.isArray(payload.commands)) {
+      invalidateBridgePort(port);
+      return;
+    }
+
+    await handleBrowserCommands(payload.commands);
+  } catch (error) {
+    invalidateBridgePort(port);
+    throw error;
   }
-
-  const payload = await response.json();
-  if (!Array.isArray(payload.commands)) {
-    return;
-  }
-
-  await handleBrowserCommands(payload.commands);
 }
 
 async function handleBrowserCommandPayload(data) {
@@ -315,8 +335,10 @@ async function sendAudibleTabs() {
     }))
   };
 
+  let port = null;
   try {
-    const response = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/v1/browser-tabs`, {
+    port = await findBridgePort({ verify: true });
+    const response = await fetch(`http://127.0.0.1:${port}/v1/browser-tabs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -326,19 +348,69 @@ async function sendAudibleTabs() {
 
     const ok = response.ok;
     await chrome.storage.local.set({
-      lastStatus: ok ? "Connected" : `Bridge returned ${response.status}`,
+      lastStatus: ok ? `Connected on port ${port}` : `Bridge returned ${response.status}`,
       lastPostAt: Date.now()
     });
     if (ok && audibleTabCount > 0) {
       startCommandChannel();
     }
-    return { ok, status: response.status };
+    return { ok, status: response.status, port };
   } catch (error) {
+    if (port !== null) {
+      invalidateBridgePort(port);
+    }
     await chrome.storage.local.set({
       lastStatus: "Audio Finder is not reachable",
       lastPostAt: Date.now()
     });
     return { ok: false, error: String(error) };
+  }
+}
+
+async function findBridgePort({ verify = false } = {}) {
+  if (bridgeDiscoveryPromise !== null) {
+    return bridgeDiscoveryPromise;
+  }
+
+  if (!verify && activeBridgePort !== null) {
+    return activeBridgePort;
+  }
+
+  bridgeDiscoveryPromise = probeBridgePorts().finally(() => {
+    bridgeDiscoveryPromise = null;
+  });
+  return bridgeDiscoveryPromise;
+}
+
+async function probeBridgePorts() {
+  const ports = activeBridgePort === null
+    ? BRIDGE_PORTS
+    : [activeBridgePort, ...BRIDGE_PORTS.filter((port) => port !== activeBridgePort)];
+
+  for (const port of ports) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/status`);
+      if (!response.ok) {
+        continue;
+      }
+
+      const status = await response.json();
+      if (status?.ok === true && status?.app === BRIDGE_APP_NAME) {
+        activeBridgePort = port;
+        return port;
+      }
+    } catch (_error) {
+      // Try the next fixed bridge port.
+    }
+  }
+
+  activeBridgePort = null;
+  throw new Error("Audio Finder is not reachable");
+}
+
+function invalidateBridgePort(port) {
+  if (activeBridgePort === port) {
+    activeBridgePort = null;
   }
 }
 

@@ -6,7 +6,10 @@
   "description": "Sends currently audible Chrome or Brave tab titles to the Audio Finder app on this Mac.",
   "incognito": "not_allowed",
   "permissions": ["alarms", "storage", "tabs"],
-  "host_permissions": ["http://127.0.0.1:17654/*"],
+  "host_permissions": [
+    "http://127.0.0.1:17654/*",
+    "http://127.0.0.1:17655/*"
+  ],
   "icons": {
     "16": "icons/icon_16.png",
     "32": "icons/icon_32.png",

@@ -16,6 +16,7 @@ private let supportedBrowserBundleIDs: Set<String> = [
     "com.google.Chrome",
     "com.brave.Browser"
 ]
+private let browserBridgePorts: [UInt16] = [17654, 17655]
 
 struct BrowserAudioTab: Identifiable, Equatable {
     let id: String
@@ -49,7 +50,7 @@ final class BrowserTabMonitor: ObservableObject {
     @Published private(set) var lastConnectorSeenAt: Date?
     @Published private(set) var lastConnectorName: String?
 
-    let port: UInt16 = 17654
+    @Published private(set) var port: UInt16 = browserBridgePorts[0]
 
     private var server: BrowserTabHTTPServer?
     private let commandHub = BrowserTabCommandHub()
@@ -59,19 +60,29 @@ final class BrowserTabMonitor: ObservableObject {
     func start() {
         guard server == nil else { return }
 
-        let httpServer = BrowserTabHTTPServer(port: port, commandHub: commandHub) { [weak self] update, origin in
-            Task { @MainActor in
-                self?.apply(update, origin: origin)
+        for candidatePort in browserBridgePorts {
+            let httpServer = BrowserTabHTTPServer(port: candidatePort, commandHub: commandHub) { [weak self] update, origin in
+                Task { @MainActor in
+                    self?.apply(update, origin: origin)
+                }
+            }
+
+            do {
+                try httpServer.start()
+                port = candidatePort
+                server = httpServer
+                serverState = .running(port: candidatePort)
+                return
+            } catch let error as BrowserTabServerError where error.isAddressInUse {
+                continue
+            } catch {
+                serverState = .failed(error.localizedDescription)
+                return
             }
         }
 
-        do {
-            try httpServer.start()
-            server = httpServer
-            serverState = .running(port: port)
-        } catch {
-            serverState = .failed(error.localizedDescription)
-        }
+        let portList = browserBridgePorts.map { String($0) }.joined(separator: " and ")
+        serverState = .failed("Ports \(portList) are already in use by other apps. Quit those apps, then reopen Audio Finder.")
     }
 
     func stop() {
@@ -1077,6 +1088,13 @@ private enum BrowserTabServerError: LocalizedError {
     case bind(port: UInt16, errno: Int32)
     case listen(Int32)
 
+    var isAddressInUse: Bool {
+        if case .bind(_, let code) = self {
+            return code == EADDRINUSE
+        }
+        return false
+    }
+
     var errorDescription: String? {
         switch self {
         case .socket(let code):
@@ -1084,6 +1102,9 @@ private enum BrowserTabServerError: LocalizedError {
         case .configure(let code):
             return "Could not configure the browser tab bridge socket (\(code))."
         case .bind(let port, let code):
+            if code == EADDRINUSE {
+                return "Port \(port) is already in use by another app. Quit that app, then reopen Audio Finder."
+            }
             return "Could not start the browser tab bridge on 127.0.0.1:\(port) (\(code))."
         case .listen(let code):
             return "Could not listen for browser tab bridge connections (\(code))."

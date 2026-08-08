@@ -1,7 +1,7 @@
 const browserChoiceInput = document.getElementById("browserChoice");
 const sharingEnabledInput = document.getElementById("sharingEnabled");
 const statusText = document.getElementById("status");
-const bridgePort = 17654;
+const BRIDGE_PORTS = [17654, 17655];
 
 document.getElementById("save").addEventListener("click", saveOptions);
 document.getElementById("test").addEventListener("click", testBridge);
@@ -38,17 +38,34 @@ async function testBridge() {
   }
 
   statusText.textContent = "Testing...";
-  try {
-    const statusResponse = await fetch(`http://127.0.0.1:${bridgePort}/v1/status`);
-    if (!statusResponse.ok) {
-      statusText.textContent = `Bridge returned ${statusResponse.status}`;
-      return;
-    }
-  } catch (error) {
+  const port = await findBridgePort();
+  if (port === null) {
     statusText.textContent = "Audio Finder is not reachable";
     return;
   }
 
   const result = await chrome.runtime.sendMessage({ type: "sendNow" });
-  statusText.textContent = result?.ok ? "Connected" : (result?.error || "Connected");
+  statusText.textContent = result?.ok
+    ? `Connected on port ${result.port || port}`
+    : (result?.error || "Audio Finder is not reachable");
+}
+
+async function findBridgePort() {
+  for (const port of BRIDGE_PORTS) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/status`);
+      if (!response.ok) {
+        continue;
+      }
+
+      const status = await response.json();
+      if (status?.ok === true && status?.app === "Audio Finder") {
+        return port;
+      }
+    } catch (_error) {
+      // Try the backup port.
+    }
+  }
+
+  return null;
 }

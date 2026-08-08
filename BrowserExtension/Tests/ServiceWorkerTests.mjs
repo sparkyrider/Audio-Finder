@@ -21,7 +21,9 @@ function eventTarget() {
 function loadServiceWorker({
   tabs = [],
   stored = { browserChoice: "auto", sharingEnabled: true },
-  isBrave = false
+  isBrave = false,
+  availableBridgePort = 17654,
+  statusByPort = {}
 } = {}) {
   const fetchCalls = [];
   const storageWrites = [];
@@ -110,7 +112,30 @@ function loadServiceWorker({
       }
     },
     async fetch(url, options = {}) {
-      fetchCalls.push({ url: String(url), options });
+      const urlString = String(url);
+      const parsedURL = new URL(urlString);
+      const port = Number(parsedURL.port);
+      fetchCalls.push({ url: urlString, options });
+
+      if (parsedURL.pathname === "/v1/status") {
+        const status = statusByPort[port] ?? (
+          port === availableBridgePort ? { ok: true, app: "Audio Finder" } : null
+        );
+        if (status === null) {
+          throw new Error("Bridge is not listening on this port");
+        }
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return status;
+          }
+        };
+      }
+
+      if (port !== availableBridgePort) {
+        throw new Error("Bridge is not listening on this port");
+      }
       if (options.method === "POST") {
         return { ok: true, status: 204 };
       }
@@ -184,7 +209,7 @@ test("posts only non-incognito audible tab metadata to the loopback bridge", asy
   const post = harness.fetchCalls.find((call) => call.options.method === "POST");
   const payload = JSON.parse(post.options.body);
 
-  assert.deepEqual(plain(result), { ok: true, status: 204 });
+  assert.deepEqual(plain(result), { ok: true, status: 204, port: 17654 });
   assert.equal(post.url, "http://127.0.0.1:17654/v1/browser-tabs");
   assert.deepEqual(payload, {
     browserBundleID: "com.google.Chrome",
@@ -201,10 +226,10 @@ test("posts only non-incognito audible tab metadata to the loopback bridge", asy
   });
   assert.equal(post.options.body.includes("private-url"), false);
   assert.equal(post.options.body.includes("Private listening"), false);
-  assert.equal(harness.storageWrites.at(-1).lastStatus, "Connected");
+  assert.equal(harness.storageWrites.at(-1).lastStatus, "Connected on port 17654");
 });
 
-test("uses the configured Brave identity and fixed production port", async () => {
+test("uses the configured Brave identity and primary production port", async () => {
   const harness = loadServiceWorker({
     stored: { browserChoice: "brave", port: 19000, sharingEnabled: true }
   });
@@ -216,6 +241,28 @@ test("uses the configured Brave identity and fixed production port", async () =>
   assert.equal(post.url, "http://127.0.0.1:17654/v1/browser-tabs");
   assert.equal(payload.browserBundleID, "com.brave.Browser");
   assert.equal(payload.browserName, "Brave");
+});
+
+test("uses the verified backup port when the primary belongs to another service", async () => {
+  const harness = loadServiceWorker({
+    availableBridgePort: 17655,
+    statusByPort: {
+      17654: { ok: true, app: "Another App" },
+      17655: { ok: true, app: "Audio Finder" }
+    }
+  });
+
+  const result = await harness.context.sendAudibleTabs();
+  const statusCalls = harness.fetchCalls.filter((call) => call.url.endsWith("/v1/status"));
+  const post = harness.fetchCalls.find((call) => call.options.method === "POST");
+
+  assert.deepEqual(plain(result), { ok: true, status: 204, port: 17655 });
+  assert.deepEqual(statusCalls.map((call) => call.url), [
+    "http://127.0.0.1:17654/v1/status",
+    "http://127.0.0.1:17655/v1/status"
+  ]);
+  assert.equal(post.url, "http://127.0.0.1:17655/v1/browser-tabs");
+  assert.equal(harness.storageWrites.at(-1).lastStatus, "Connected on port 17655");
 });
 
 test("activates only valid tab commands", async () => {
@@ -266,7 +313,10 @@ test("does not query or transmit tab data before explicit opt-in", async () => {
   assert.equal(harness.storageWrites.at(-1).lastStatus, "Connector disabled");
 });
 
-test("manifest disallows incognito operation and limits host access to the bridge", () => {
+test("manifest disallows incognito operation and limits host access to fixed bridge ports", () => {
   assert.equal(manifest.incognito, "not_allowed");
-  assert.deepEqual(manifest.host_permissions, ["http://127.0.0.1:17654/*"]);
+  assert.deepEqual(manifest.host_permissions, [
+    "http://127.0.0.1:17654/*",
+    "http://127.0.0.1:17655/*"
+  ]);
 });
