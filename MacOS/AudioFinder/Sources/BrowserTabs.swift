@@ -36,6 +36,13 @@ struct BrowserAudioTab: Identifiable, Equatable {
     }
 }
 
+struct ConnectedBrowser: Identifiable, Equatable {
+    let bundleID: String
+    let displayName: String
+
+    var id: String { bundleID }
+}
+
 @MainActor
 final class BrowserTabMonitor: ObservableObject {
     enum ServerState: Equatable {
@@ -49,12 +56,14 @@ final class BrowserTabMonitor: ObservableObject {
     @Published private(set) var trustedExtensionOrigins: [String] = BrowserExtensionTrust.trustedOrigins
     @Published private(set) var lastConnectorSeenAt: Date?
     @Published private(set) var lastConnectorName: String?
+    @Published private(set) var connectedBrowsers: [ConnectedBrowser] = []
 
     @Published private(set) var port: UInt16 = browserBridgePorts[0]
 
     private var server: BrowserTabHTTPServer?
     private let commandHub = BrowserTabCommandHub()
     private var snapshotDates: [String: Date] = [:]
+    private var connectorNames: [String: String] = [:]
     private let staleInterval: TimeInterval = 75
 
     func start() {
@@ -101,6 +110,10 @@ final class BrowserTabMonitor: ObservableObject {
         return tabsByBundleID[bundleID] ?? []
     }
 
+    func isConnected(to bundleID: String) -> Bool {
+        connectedBrowsers.contains { $0.bundleID == bundleID }
+    }
+
     func tabs(for bundleID: String?, visibleApps: [AudioApp]) -> [BrowserAudioTab] {
         let direct = tabs(for: bundleID)
         guard direct.isEmpty,
@@ -134,21 +147,20 @@ final class BrowserTabMonitor: ObservableObject {
         trustedExtensionOrigins = []
         lastConnectorSeenAt = nil
         lastConnectorName = nil
+        connectedBrowsers = []
         tabsByBundleID.removeAll()
         snapshotDates.removeAll()
+        connectorNames.removeAll()
     }
 
     private func apply(_ update: BrowserTabUpdatePayload, origin: String?) {
         let bundleID = update.browserBundleID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard supportedBrowserBundleIDs.contains(bundleID) else { return }
 
-        let now = Date()
-        snapshotDates[bundleID] = now
-
         let browserName = update.browserName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = browserName?.isEmpty == false ? browserName! : BrowserTabMonitor.browserName(for: bundleID)
-        lastConnectorSeenAt = now
-        lastConnectorName = name
+        let now = Date()
+        recordConnectorHeartbeat(browserBundleID: bundleID, browserName: name, at: now)
         if origin != nil {
             trustedExtensionOrigins = BrowserExtensionTrust.trustedOrigins
         }
@@ -180,6 +192,23 @@ final class BrowserTabMonitor: ObservableObject {
         pruneStaleSnapshots(now: now)
     }
 
+    /// Records a heartbeat even when the browser has no audible tabs. Keeping
+    /// connection state separate from tab rows lets setup UI report Chrome and
+    /// Brave independently and truthfully.
+    func recordConnectorHeartbeat(
+        browserBundleID: String,
+        browserName: String,
+        at now: Date = Date()
+    ) {
+        guard supportedBrowserBundleIDs.contains(browserBundleID) else { return }
+
+        snapshotDates[browserBundleID] = now
+        connectorNames[browserBundleID] = browserName
+        lastConnectorSeenAt = now
+        lastConnectorName = browserName
+        publishConnectedBrowsers()
+    }
+
     private func pruneStaleSnapshots(now: Date = Date()) {
         let staleBundleIDs = snapshotDates.compactMap { bundleID, date in
             now.timeIntervalSince(date) > staleInterval ? bundleID : nil
@@ -189,12 +218,30 @@ final class BrowserTabMonitor: ObservableObject {
         for bundleID in staleBundleIDs {
             tabsByBundleID.removeValue(forKey: bundleID)
             snapshotDates.removeValue(forKey: bundleID)
+            connectorNames.removeValue(forKey: bundleID)
         }
+
+        publishConnectedBrowsers()
 
         if let lastConnectorSeenAt,
            now.timeIntervalSince(lastConnectorSeenAt) > staleInterval {
             self.lastConnectorSeenAt = nil
             lastConnectorName = nil
+        }
+    }
+
+    private func publishConnectedBrowsers() {
+        connectedBrowsers = snapshotDates.keys.compactMap { bundleID in
+            guard connectorNames[bundleID] != nil else { return nil }
+            return ConnectedBrowser(
+                bundleID: bundleID,
+                displayName: BrowserTabMonitor.shortBrowserName(for: bundleID)
+            )
+        }
+        .sorted { lhs, rhs in
+            let order = ["com.google.Chrome", "com.brave.Browser"]
+            return (order.firstIndex(of: lhs.bundleID) ?? order.count)
+                < (order.firstIndex(of: rhs.bundleID) ?? order.count)
         }
     }
 
@@ -205,6 +252,10 @@ final class BrowserTabMonitor: ObservableObject {
         default:
             return "Google Chrome"
         }
+    }
+
+    private static func shortBrowserName(for bundleID: String) -> String {
+        bundleID == "com.brave.Browser" ? "Brave" : "Chrome"
     }
 
 }

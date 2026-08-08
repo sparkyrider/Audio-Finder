@@ -22,6 +22,12 @@ enum LoginItemStatus: Equatable {
     }
 }
 
+enum SettingsTab: Hashable {
+    case home
+    case preferences
+    case browsers
+}
+
 @MainActor
 protocol LoginItemManaging {
     var status: LoginItemStatus { get }
@@ -71,6 +77,9 @@ final class SettingsStore: ObservableObject {
     }
 
     // Published settings ----------------------------------------------------
+    /// Transient window navigation. Browser setup links always return here.
+    @Published var selectedTab: SettingsTab = .home
+
     @Published var showRecentlyActive: Bool {
         didSet { defaults.set(showRecentlyActive, forKey: Key.showRecentlyActive) }
     }

@@ -59,9 +59,63 @@ struct MenuContentView: View {
             Text("Audio Finder")
                 .font(.headline)
             Spacer()
+            browserStatusPill
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private var browserStatusPill: some View {
+        let isConnected = browserConnectionText != nil
+
+        return Button(action: showBrowserSetup) {
+            HStack(spacing: 8) {
+                if isConnected {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 7, height: 7)
+                } else {
+                    Image(systemName: "puzzlepiece.extension.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tint)
+                }
+
+                Text(browserConnectionText ?? "Connect browser")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(
+                        isConnected
+                            ? Color.green.opacity(0.12)
+                            : Color.accentColor.opacity(0.10)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Open browser extension setup")
+        .accessibilityLabel(browserConnectionText ?? "Connect browser")
+    }
+
+    private var browserConnectionText: String? {
+        let names = browserTabs.connectedBrowsers.map(\.displayName)
+        switch names.count {
+        case 0:
+            return nil
+        case 1:
+            return "\(names[0]) connected"
+        default:
+            return "\(names.count) browsers connected"
+        }
+    }
+
+    private func showBrowserSetup() {
+        settings.selectedTab = .home
+        openWindow(id: AppWindow.settings)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @ViewBuilder
@@ -79,6 +133,7 @@ struct MenuContentView: View {
             if rowCount > maxVisibleRows {
                 ScrollView { contentStack }
                     .frame(height: maxListHeight)
+                    .scrollIndicators(.hidden)
             } else {
                 contentStack
             }
@@ -139,6 +194,7 @@ struct MenuContentView: View {
     private var footer: some View {
         HStack {
             Button {
+                settings.selectedTab = .home
                 openWindow(id: AppWindow.settings)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {

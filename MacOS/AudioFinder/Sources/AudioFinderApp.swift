@@ -52,12 +52,13 @@ struct AudioFinderApp: App {
                 .environmentObject(monitor)
                 .environmentObject(browserTabs)
         }
-        .defaultSize(width: 540, height: 560)
+        .defaultSize(width: 580, height: 600)
         .windowResizability(.contentSize)
 
         Window("Welcome to Audio Finder", id: AppWindow.welcome) {
             WelcomeWindow()
                 .environmentObject(settings)
+                .environmentObject(browserTabs)
         }
         .defaultPosition(.center)
         .windowResizability(.contentSize)
@@ -165,6 +166,9 @@ private struct AppLifecycleBridge: View {
 
     private func presentPrimaryWindow() {
         let id = settings.hasCompletedOnboarding ? AppWindow.settings : AppWindow.welcome
+        if id == AppWindow.settings {
+            settings.selectedTab = .home
+        }
         openWindow(id: id)
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)

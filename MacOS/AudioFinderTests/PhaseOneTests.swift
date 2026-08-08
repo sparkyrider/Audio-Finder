@@ -18,6 +18,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertFalse(store.hasCompletedOnboarding)
         XCTAssertFalse(store.launchAtLogin)
         XCTAssertEqual(store.loginItemStatus, .notRegistered)
+        XCTAssertEqual(store.selectedTab, .home)
     }
 
     func testEnablingLaunchAtLoginRegistersTheMainApp() {
@@ -264,6 +265,40 @@ final class BrowserExtensionTrustTests: XCTestCase {
         XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: nil))
         XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: "https://example.com"))
         XCTAssertNil(BrowserExtensionTrust.trustableOrigin(from: "chrome-extension://too-short"))
+    }
+}
+
+@MainActor
+final class BrowserConnectionStateTests: XCTestCase {
+    func testTracksChromeAndBraveHeartbeatsIndependently() {
+        let monitor = BrowserTabMonitor()
+        let now = Date()
+
+        monitor.recordConnectorHeartbeat(
+            browserBundleID: "com.brave.Browser",
+            browserName: "Brave",
+            at: now
+        )
+        monitor.recordConnectorHeartbeat(
+            browserBundleID: "com.google.Chrome",
+            browserName: "Google Chrome",
+            at: now
+        )
+
+        XCTAssertTrue(monitor.isConnected(to: "com.google.Chrome"))
+        XCTAssertTrue(monitor.isConnected(to: "com.brave.Browser"))
+        XCTAssertEqual(monitor.connectedBrowsers.map(\.displayName), ["Chrome", "Brave"])
+    }
+
+    func testIgnoresUnsupportedBrowserHeartbeat() {
+        let monitor = BrowserTabMonitor()
+
+        monitor.recordConnectorHeartbeat(
+            browserBundleID: "com.apple.Safari",
+            browserName: "Safari"
+        )
+
+        XCTAssertTrue(monitor.connectedBrowsers.isEmpty)
     }
 }
 
