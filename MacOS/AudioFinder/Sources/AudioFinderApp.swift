@@ -17,7 +17,7 @@ enum AppWindow {
 
 extension Notification.Name {
     static let audioFinderShowPrimaryWindow = Notification.Name(
-        "com.audiofinder.app.show-primary-window"
+        "app.audiofinder.mac.show-primary-window"
     )
 }
 
