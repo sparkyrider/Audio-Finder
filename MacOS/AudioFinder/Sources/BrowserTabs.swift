@@ -258,6 +258,26 @@ final class BrowserTabMonitor: ObservableObject {
         bundleID == "com.brave.Browser" ? "Brave" : "Chrome"
     }
 
+#if DEBUG
+    /// Seed representative connector state for previews and deterministic store artwork.
+    /// This is compiled out of release builds and never changes live browser data.
+    func previewSeed(
+        browserBundleID: String,
+        browserName: String,
+        tabs: [BrowserAudioTab],
+        port: UInt16 = browserBridgePorts[0]
+    ) {
+        self.port = port
+        serverState = .running(port: port)
+        tabsByBundleID = [browserBundleID: tabs]
+        lastConnectorSeenAt = Date()
+        lastConnectorName = browserName
+        snapshotDates = [browserBundleID: Date()]
+        connectorNames = [browserBundleID: browserName]
+        publishConnectedBrowsers()
+    }
+#endif
+
 }
 
 private struct BrowserTabUpdatePayload: Decodable {

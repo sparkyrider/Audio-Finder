@@ -5,6 +5,7 @@
 //  Minimal settings, plus Privacy, browser connector, and diagnostics sections.
 //
 
+import AppKit
 import SwiftUI
 
 private enum ProductLinks {
@@ -20,8 +21,18 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var monitor: AudioMonitor
     @EnvironmentObject private var browserTabs: BrowserTabMonitor
-    @State private var isPrivacyExpanded = false
+    @State private var isPrivacyExpanded: Bool
     @State private var isDiagnosticsExpanded = false
+
+    private let startBrowserMonitorOnAppear: Bool
+
+    init(
+        startBrowserMonitorOnAppear: Bool = true,
+        initialPrivacyExpanded: Bool = false
+    ) {
+        self.startBrowserMonitorOnAppear = startBrowserMonitorOnAppear
+        _isPrivacyExpanded = State(initialValue: initialPrivacyExpanded)
+    }
 
     var body: some View {
         TabView(selection: $settings.selectedTab) {
@@ -38,8 +49,10 @@ struct SettingsView: View {
         .frame(width: 580, height: 600)
         .onAppear {
             settings.refreshLaunchAtLogin()
-            browserTabs.start()
-            browserTabs.refreshNow()
+            if startBrowserMonitorOnAppear {
+                browserTabs.start()
+                browserTabs.refreshNow()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             settings.refreshLaunchAtLogin()
@@ -409,10 +422,7 @@ struct BrowserConnectorCard: View {
         let connected = browserTabs.isConnected(to: browser.bundleID)
 
         return HStack(spacing: 12) {
-            Image(browser.assetName)
-                .interpolation(.high)
-                .resizable()
-                .scaledToFit()
+            browserImage(browser)
                 .frame(width: 32, height: 32)
                 .padding(browser == .brave ? 3 : 0)
                 .frame(width: 38, height: 38)
@@ -442,6 +452,37 @@ struct BrowserConnectorCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func browserImage(_ browser: BrowserTarget) -> some View {
+#if AUDIO_FINDER_SCREENSHOT_RENDERER
+        let assetsDirectory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/Assets.xcassets")
+        let filename = browser == .chrome ? "chrome@2x.png" : "brave@2x.png"
+        let path = assetsDirectory
+            .appendingPathComponent("\(browser.assetName).imageset")
+            .appendingPathComponent(filename)
+            .path
+
+        if let image = NSImage(contentsOfFile: path) {
+            Image(nsImage: image)
+                .interpolation(.high)
+                .resizable()
+                .scaledToFit()
+        } else {
+            Image(systemName: "globe")
+                .resizable()
+                .scaledToFit()
+        }
+#else
+        Image(browser.assetName)
+            .interpolation(.high)
+            .resizable()
+            .scaledToFit()
+#endif
     }
 }
 

@@ -168,6 +168,7 @@ private extension AudioApp {
 
 /// A small three-bar equalizer animation to indicate live audio.
 struct SoundBars: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = false
 
     var body: some View {
@@ -176,7 +177,11 @@ struct SoundBars: View {
             bar(scale: phase ? 0.5 : 1.0, delay: 0.15)
             bar(scale: phase ? 0.9 : 0.6, delay: 0.3)
         }
-        .onAppear { phase = true }
+        .onAppear {
+            if !reduceMotion {
+                phase = true
+            }
+        }
     }
 
     private func bar(scale: CGFloat, delay: Double) -> some View {
@@ -184,7 +189,11 @@ struct SoundBars: View {
             .frame(width: 3)
             .scaleEffect(y: scale, anchor: .bottom)
             .animation(
-                .easeInOut(duration: 0.5).repeatForever(autoreverses: true).delay(delay),
+                reduceMotion
+                    ? nil
+                    : .easeInOut(duration: 0.5)
+                        .repeatForever(autoreverses: true)
+                        .delay(delay),
                 value: phase
             )
     }

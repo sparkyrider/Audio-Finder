@@ -21,7 +21,9 @@ extension Notification.Name {
     )
 }
 
+#if !AUDIO_FINDER_SCREENSHOT_RENDERER
 @main
+#endif
 struct AudioFinderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
