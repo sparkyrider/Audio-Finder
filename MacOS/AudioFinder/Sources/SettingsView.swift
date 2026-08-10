@@ -93,7 +93,9 @@ struct SettingsView: View {
                 .frame(width: 64, height: 64)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Welcome to Audio Finder")
+                // "Welcome to…" belongs to the one-time Welcome window; the
+                // recurring Settings home leads with the product name.
+                Text("Audio Finder")
                     .font(.title.bold())
                 Text("See which app — and which browser — is playing sound.")
                     .font(.title3)
@@ -106,75 +108,49 @@ struct SettingsView: View {
     // MARK: - Preferences
 
     private var preferencesTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                audioListPreferences
-                privacySection
-                diagnosticsSection
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private var audioListPreferences: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Audio list")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: 0) {
+        // A grouped Form matches System Settings (and the Browsers tab), so
+        // both settings tabs share the native surface, metrics, and dividers.
+        Form {
+            Section {
                 Toggle("Hide system & background apps", isOn: $settings.hideSystemApps)
-                    .padding(14)
+                    .toggleStyle(.switch)
 
-                Divider()
+                Toggle("Show recently active apps", isOn: $settings.showRecentlyActive)
+                    .toggleStyle(.switch)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Show recently active apps", isOn: $settings.showRecentlyActive)
-
-                    HStack {
-                        Text("Keep visible for")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Picker("Keep visible for", selection: $settings.recentlyActiveDuration) {
-                            Text("15 seconds").tag(15)
-                            Text("30 seconds").tag(30)
-                            Text("60 seconds").tag(60)
-                        }
-                        .labelsHidden()
-                        .frame(width: 128)
-                        .disabled(!settings.showRecentlyActive)
-                    }
-
-                    Text("Useful for catching brief notification sounds after they stop.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Picker("Keep visible for", selection: $settings.recentlyActiveDuration) {
+                    Text("15 seconds").tag(15)
+                    Text("30 seconds").tag(30)
+                    Text("60 seconds").tag(60)
                 }
-                .padding(14)
+                .disabled(!settings.showRecentlyActive)
+            } header: {
+                Text("Audio List")
+            } footer: {
+                Text("Useful for catching brief notification sounds after they stop.")
+            }
 
-                Divider()
+            Section {
+                LabeledContent("Audio detection", value: audioStatusText)
 
-                HStack {
-                    Text(audioStatusText)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                LabeledContent("Welcome tour") {
                     Button("Show Welcome") {
                         openWindow(id: AppWindow.welcome)
                         NSApp.activate(ignoringOtherApps: true)
                     }
                 }
-                .padding(14)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.75), lineWidth: 1)
-            )
+
+            Section {
+                privacySection
+            }
+
+            Section {
+                diagnosticsSection
+            }
         }
+        .formStyle(.grouped)
+        .scrollIndicators(.hidden)
     }
 
     private var audioStatusText: String {
@@ -217,13 +193,10 @@ struct SettingsView: View {
                 }
                 .font(.callout)
             }
-            .padding(.top, 12)
+            .padding(.top, 8)
         } label: {
             Label("Privacy", systemImage: "lock.shield")
-                .font(.headline)
         }
-        .padding(14)
-        .background(infoCardBackground)
     }
 
     // MARK: - Browsers
@@ -309,22 +282,10 @@ struct SettingsView: View {
                     }
                 }
             }
-            .padding(.top, 12)
+            .padding(.top, 8)
         } label: {
             Label("Diagnostics", systemImage: "stethoscope")
-                .font(.headline)
         }
-        .padding(14)
-        .background(infoCardBackground)
-    }
-
-    private var infoCardBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.75), lineWidth: 1)
-            )
     }
 
     private var report: String {
@@ -414,8 +375,8 @@ struct BrowserConnectorCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.leading, 38)
-        .padding(.trailing, 10)
+        // 28pt step number + 12pt gap: cards align with the step title text.
+        .padding(.leading, 40)
     }
 
     private func browserRow(_ browser: BrowserTarget) -> some View {
@@ -518,7 +479,8 @@ struct LaunchAtLoginCard: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -528,7 +490,6 @@ struct LaunchAtLoginCard: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.75), lineWidth: 1)
         )
-        .padding(.leading, 38)
-        .padding(.trailing, 10)
+        .padding(.leading, 40)
     }
 }

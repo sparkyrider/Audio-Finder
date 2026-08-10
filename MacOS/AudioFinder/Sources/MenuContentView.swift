@@ -7,6 +7,7 @@
 //  empty / unsupported / onboarding states.
 //
 
+import AppKit
 import SwiftUI
 
 struct MenuContentView: View {
@@ -36,7 +37,7 @@ struct MenuContentView: View {
             footer
         }
         .frame(width: 300)
-        .background(.regularMaterial)   // opaque popover surface (.window style is transparent by default)
+        .background(menuPanelBackground)
         .onAppear {
             isVisible = true
             monitor.refreshNow()        // catch anything that changed while closed
@@ -48,6 +49,18 @@ struct MenuContentView: View {
             monitor.refreshNow()              // keep the open popover live
             browserTabs.refreshNow()
         }
+    }
+
+    // The system menu material, so the dropdown matches every other menu bar
+    // item. The marketing renderer draws offscreen where behind-window
+    // sampling is unavailable, so it keeps the previous in-window material.
+    @ViewBuilder
+    private var menuPanelBackground: some View {
+#if AUDIO_FINDER_SCREENSHOT_RENDERER
+        Rectangle().fill(.regularMaterial)
+#else
+        MenuPanelMaterial().ignoresSafeArea()
+#endif
     }
 
     // MARK: - Sections
@@ -193,25 +206,18 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack {
-            Button {
+            FooterActionButton(title: "Settings", systemImage: "gearshape") {
                 settings.selectedTab = .home
                 openWindow(id: AppWindow.settings)
                 NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Settings", systemImage: "gearshape")
             }
             Spacer()
-            Button {
+            FooterActionButton(title: "Quit", systemImage: "power") {
                 NSApp.terminate(nil)
-            } label: {
-                Label("Quit", systemImage: "power")
             }
         }
-        .buttonStyle(.plain)
-        .labelStyle(.titleAndIcon)
-        .font(.callout)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
     }
 
     // MARK: - State views
@@ -260,3 +266,48 @@ struct MenuContentView: View {
     }
 
 }
+
+/// Footer actions highlight on hover like rows do, so the whole panel shares
+/// one interaction language.
+private struct FooterActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.titleAndIcon)
+                .font(.callout)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isHovering ? Color.primary.opacity(0.08) : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+}
+
+#if !AUDIO_FINDER_SCREENSHOT_RENDERER
+/// The `.menu` material native menu bar dropdowns sit on. SwiftUI materials
+/// composite within the window, which left the panel reading as a flat sheet
+/// next to NSMenu; blending behind the window picks up the desktop blur the
+/// same way the system menus alongside it do.
+private struct MenuPanelMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .menu
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+}
+#endif
