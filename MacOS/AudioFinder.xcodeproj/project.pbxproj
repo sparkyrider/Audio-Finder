@@ -24,6 +24,8 @@
 		B1000012 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* AppCoordinator.swift */; };
 		B1000013 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1000013 /* PrivacyInfo.xcprivacy */; };
 		B2000001 /* PhaseOneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* PhaseOneTests.swift */; };
+		B1000014 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A1000014 /* LICENSE */; };
+		B1000015 /* NOTICE in Resources */ = {isa = PBXBuildFile; fileRef = A1000015 /* NOTICE */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +60,8 @@
 		A1000013 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A2000001 /* PhaseOneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseOneTests.swift; sourceTree = "<group>"; };
 		A2000002 /* AudioFinderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioFinderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000014 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = "../../../LICENSE"; sourceTree = "<group>"; };
+		A1000015 /* NOTICE */ = {isa = PBXFileReference; lastKnownFileType = text; name = NOTICE; path = "../../../NOTICE"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,6 +137,8 @@
 				A100000E /* Info.plist */,
 				A100000F /* AudioFinder.entitlements */,
 				A1000013 /* PrivacyInfo.xcprivacy */,
+				A1000015 /* NOTICE */,
+				A1000014 /* LICENSE */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -227,6 +233,8 @@
 			files = (
 				B100000D /* Assets.xcassets in Resources */,
 				B1000013 /* PrivacyInfo.xcprivacy in Resources */,
+				B1000015 /* NOTICE in Resources */,
+				B1000014 /* LICENSE in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
