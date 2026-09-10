@@ -1,0 +1,61 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Test macOS app with ad hoc signing
+        run: xcodebuild -project MacOS/AudioFinder.xcodeproj -scheme AudioFinder -destination 'platform=macOS' -derivedDataPath build/CI test CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: node --test BrowserExtension/Tests/*.mjs
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check repository source layout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          roots = ('MacOS/AudioFinder/', 'MacOS/AudioFinder.xcodeproj/',
+                   'MacOS/AudioFinderTests/', 'BrowserExtension/src/',
+                   'BrowserExtension/icons/', 'BrowserExtension/Tests/',
+                   'AudioFinder/', 'AudioFinder.xcodeproj/', 'AudioFinderTests/')
+          files = {'README.md', 'LICENSE', 'NOTICE', '.gitignore',
+                   '.github/workflows/ci.yml', 'MacOS/scripts/install_local.sh',
+                   'scripts/install_local.sh', 'BrowserExtension/manifest.json',
+                   'BrowserExtension/options.html', 'BrowserExtension/options.css',
+                   'BrowserExtension/options.js'}
+          paths = subprocess.check_output(
+              ['git', 'log', '--all', '--format=', '--name-only']).decode().splitlines()
+          unexpected = sorted({p for p in paths if p and p not in files and not p.startswith(roots)})
+          if unexpected:
+              raise SystemExit('Unexpected source paths: ' + ', '.join(unexpected))
+          PY
+      - name: Scan source history for credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz --output "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git . --log-opts='--all --full-history -m' --ignore-gitleaks-allow --redact=100 --no-banner

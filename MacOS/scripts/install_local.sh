@@ -15,7 +15,7 @@ PROJECT_ROOT="$(pwd)"
 BUILD_ROOT="$PROJECT_ROOT/build/LocalInstall"
 DERIVED_DATA="$BUILD_ROOT/DerivedData"
 INSTALL_DIRECTORY="${AUDIO_FINDER_INSTALL_DIR:-$HOME/Applications}"
-BUILT_APP="$DERIVED_DATA/Build/Products/Release/AudioFinder.app"
+BUILT_APP="$DERIVED_DATA/Build/Products/Debug/AudioFinder.app"
 INSTALLED_APP="$INSTALL_DIRECTORY/AudioFinder.app"
 BACKUP_APP=""
 
@@ -37,7 +37,7 @@ echo "Building Audio Finder…"
 xcodebuild \
   -project AudioFinder.xcodeproj \
   -scheme AudioFinder \
-  -configuration Release \
+  -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \
   build \
