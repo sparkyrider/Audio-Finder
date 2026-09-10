@@ -44,7 +44,10 @@ jobs:
                    '.github/workflows/ci.yml', 'MacOS/scripts/install_local.sh',
                    'scripts/install_local.sh', 'BrowserExtension/manifest.json',
                    'BrowserExtension/options.html', 'BrowserExtension/options.css',
-                   'BrowserExtension/options.js'}
+                   'BrowserExtension/options.js',
+                   'docs/screenshots/audio-menu.png',
+                   'docs/screenshots/browser-connection.png',
+                   'docs/screenshots/preferences.png'}
           paths = subprocess.check_output(
               ['git', 'log', '--all', '--format=', '--name-only']).decode().splitlines()
           unexpected = sorted({p for p in paths if p and p not in files and not p.startswith(roots)})

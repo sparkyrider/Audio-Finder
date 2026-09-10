@@ -8,6 +8,32 @@ Audio Finder reads audio activity through Core Audio. It does not record audio
 or require microphone access. The browser connector runs only after you enable
 it and communicates with the app locally on `127.0.0.1`.
 
+## See it in action
+
+**Find the app or tab making sound.** Open the menu bar popover to see what's
+playing, then select an app or browser tab to jump to it. Recently active apps
+stay visible briefly so you can track down short notification sounds too.
+
+<img src="docs/screenshots/audio-menu.png" width="380" alt="Audio Finder showing Chrome tabs and Music currently playing, with Podcasts recently active">
+
+**Connect Chrome or Brave.** Enable the browser extension to see audible tab
+titles in the menu. The Browsers settings show whether the local connector is
+connected.
+
+<img src="docs/screenshots/browser-connection.png" width="660" alt="Audio Finder browser settings showing Chrome connected through the local browser bridge">
+
+<details>
+<summary>Preferences and privacy</summary>
+
+Choose whether to hide background apps and how long to keep recently active
+apps visible. Audio Finder reads audio activity without recording audio.
+
+<img src="docs/screenshots/preferences.png" width="660" alt="Audio Finder preferences for recent activity and background apps, with expandable Privacy and Diagnostics sections">
+
+</details>
+
+Screenshots show the app with example activity.
+
 ## Build and run the Mac app
 
 You need macOS 14.2 or later and Xcode with a compatible macOS SDK.
